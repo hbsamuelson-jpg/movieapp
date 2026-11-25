@@ -1,0 +1,206 @@
+// Demo Mode data: a small built-in catalog plus sample ratings for all three profiles.
+// The first 27 use real TMDB ids; the rest use placeholder ids (900001+). Scores and runtimes are approximate.
+// Posters are left empty on purpose — the app draws a vintage title card instead.
+
+const m = (id, title, year, cert, runtime, genres, vote, overview) => ({
+  id, title, year, cert, runtime, genres, vote, overview, poster: null, detailed: true,
+});
+
+export const DEMO_CATALOG = [
+  m(862, 'Toy Story', 1995, 'G', 81, ['Animation', 'Adventure', 'Family', 'Comedy'], 8.0, "A cowboy doll feels threatened when a flashy space ranger becomes his owner's new favorite toy."),
+  m(354912, 'Coco', 2017, 'PG', 105, ['Animation', 'Family', 'Fantasy', 'Music'], 8.2, 'A boy who dreams of being a musician crosses into the Land of the Dead to uncover his family history.'),
+  m(9806, 'The Incredibles', 2004, 'PG', 115, ['Animation', 'Action', 'Adventure', 'Family'], 7.7, 'A family of undercover superheroes is pulled out of suburban retirement to save the world.'),
+  m(10191, 'How to Train Your Dragon', 2010, 'PG', 98, ['Animation', 'Adventure', 'Family', 'Fantasy'], 7.8, 'A misfit young Viking befriends the dragon he was supposed to slay.'),
+  m(346648, 'Paddington 2', 2017, 'PG', 103, ['Family', 'Comedy', 'Adventure'], 7.5, 'Paddington takes odd jobs to buy the perfect present, only for it to be stolen.'),
+  m(324857, 'Spider-Man: Into the Spider-Verse', 2018, 'PG', 117, ['Animation', 'Action', 'Adventure', 'Sci-Fi'], 8.4, 'Brooklyn teen Miles Morales meets Spider-heroes from other dimensions.'),
+  m(105, 'Back to the Future', 1985, 'PG', 116, ['Adventure', 'Comedy', 'Sci-Fi'], 8.3, 'A teenager is accidentally sent thirty years into the past in a time-traveling DeLorean.'),
+  m(2493, 'The Princess Bride', 1987, 'PG', 98, ['Adventure', 'Family', 'Fantasy', 'Comedy'], 7.7, 'A farmhand turned pirate fights through swordsmen, giants and royalty to reach his true love.'),
+  m(601, 'E.T. the Extra-Terrestrial', 1982, 'PG', 115, ['Sci-Fi', 'Adventure', 'Family'], 7.5, 'A lonely boy helps a stranded alien find a way home.'),
+  m(129, 'Spirited Away', 2001, 'PG', 125, ['Animation', 'Family', 'Fantasy'], 8.5, 'A ten-year-old girl wanders into a world of spirits and must work to free her parents.'),
+  m(329, 'Jurassic Park', 1993, 'PG-13', 127, ['Adventure', 'Sci-Fi'], 7.9, 'A preview tour of a dinosaur theme park goes badly wrong when the power fails.'),
+  m(9340, 'The Goonies', 1985, 'PG', 114, ['Adventure', 'Comedy', 'Family'], 7.5, "A group of kids follow an old pirate map in a last-ditch effort to save their homes."),
+  m(109445, 'Frozen', 2013, 'PG', 102, ['Animation', 'Family', 'Adventure', 'Fantasy'], 7.2, 'A fearless princess sets off to find her sister, whose icy powers have trapped the kingdom in winter.'),
+  m(771, 'Home Alone', 1990, 'PG', 103, ['Comedy', 'Family'], 7.4, 'An eight-year-old left behind at Christmas defends his house from two burglars.'),
+  m(277834, 'Moana', 2016, 'PG', 107, ['Animation', 'Adventure', 'Family', 'Comedy'], 7.6, 'A chief\'s daughter sails beyond the reef with a demigod to save her island.'),
+  // Not yet rated by anyone — these fill out Rate and Search.
+  m(12, 'Finding Nemo', 2003, 'G', 100, ['Animation', 'Family'], 7.8, 'A timid clownfish crosses the ocean to find his captured son.'),
+  m(8587, 'The Lion King', 1994, 'G', 88, ['Animation', 'Family', 'Drama'], 8.3, 'A young lion prince flees his kingdom, then returns to take his place.'),
+  m(14160, 'Up', 2009, 'PG', 96, ['Animation', 'Comedy', 'Family', 'Adventure'], 8.0, 'A widower ties thousands of balloons to his house and floats to South America with an accidental stowaway.'),
+  m(10681, 'WALL·E', 2008, 'G', 98, ['Animation', 'Family', 'Sci-Fi'], 8.1, 'A lonely trash-compacting robot follows a sleek probe across the galaxy.'),
+  m(150540, 'Inside Out', 2015, 'PG', 95, ['Animation', 'Family', 'Adventure', 'Comedy'], 7.9, "The emotions inside an eleven-year-old's head struggle through a cross-country move."),
+  m(808, 'Shrek', 2001, 'PG', 90, ['Animation', 'Comedy', 'Fantasy', 'Adventure', 'Family'], 7.7, 'A grumpy ogre agrees to rescue a princess to get his swamp back.'),
+  m(2062, 'Ratatouille', 2007, 'G', 111, ['Animation', 'Comedy', 'Family', 'Fantasy'], 7.8, 'A rat with a gifted palate teams up with a kitchen boy in a famous Paris restaurant.'),
+  m(269149, 'Zootopia', 2016, 'PG', 108, ['Animation', 'Adventure', 'Family', 'Comedy'], 7.7, 'A rookie rabbit cop and a con-artist fox uncover a conspiracy in a city of animals.'),
+  m(585, 'Monsters, Inc.', 2001, 'G', 92, ['Animation', 'Comedy', 'Family'], 7.8, 'Two monsters who scare kids for a living end up protecting one.'),
+  m(8392, 'My Neighbor Totoro', 1988, 'G', 86, ['Animation', 'Family', 'Fantasy'], 8.1, 'Two sisters move to the countryside and meet the forest spirits living nearby.'),
+  m(900001, "Toy Story 2", 1999, 'G', 92, ['Animation', 'Family', 'Comedy'], 7.6, "Woody is stolen by a toy collector and the gang mounts a rescue."),
+  m(900002, "Toy Story 3", 2010, 'G', 103, ['Animation', 'Family', 'Comedy'], 7.8, "The toys land in a daycare as Andy heads to college."),
+  m(900003, "Finding Dory", 2016, 'PG', 97, ['Animation', 'Family', 'Comedy'], 7.0, "A forgetful blue tang sets out to find her parents."),
+  m(900004, "Monsters University", 2013, 'G', 104, ['Animation', 'Family', 'Comedy'], 7.0, "Mike and Sulley meet as rivals in scare school."),
+  m(900005, "Incredibles 2", 2018, 'PG', 118, ['Animation', 'Action', 'Family'], 7.5, "Elastigirl takes the spotlight while Bob runs the house."),
+  m(900006, "Cars", 2006, 'G', 117, ['Animation', 'Family', 'Comedy'], 6.9, "A hotshot race car gets stranded in a forgotten desert town."),
+  m(900007, "A Bug's Life", 1998, 'G', 95, ['Animation', 'Family', 'Comedy'], 7.0, "An inventive ant recruits circus bugs to defend his colony."),
+  m(900008, "Luca", 2021, 'PG', 95, ['Animation', 'Family', 'Comedy'], 7.8, "A young sea monster spends a summer on land on the Italian Riviera."),
+  m(900009, "Soul", 2020, 'PG', 100, ['Animation', 'Family', 'Fantasy'], 8.1, "A jazz teacher's soul gets separated from his body on his big day."),
+  m(900010, "Turning Red", 2022, 'PG', 100, ['Animation', 'Family', 'Comedy'], 7.4, "A thirteen-year-old turns into a giant red panda when she gets excited."),
+  m(900011, "Onward", 2020, 'PG', 102, ['Animation', 'Family', 'Fantasy'], 7.6, "Two elf brothers go on a quest to spend one more day with their dad."),
+  m(900012, "Encanto", 2021, 'PG', 102, ['Animation', 'Family', 'Fantasy'], 7.6, "The one girl without a magical gift may be her family's last hope."),
+  m(900013, "Big Hero 6", 2014, 'PG', 102, ['Animation', 'Action', 'Family'], 7.7, "A robotics prodigy and an inflatable robot form a hero team."),
+  m(900014, "Tangled", 2010, 'PG', 100, ['Animation', 'Family', 'Fantasy'], 7.6, "Rapunzel leaves her tower with a charming thief."),
+  m(900015, "Wreck-It Ralph", 2012, 'PG', 101, ['Animation', 'Family', 'Comedy'], 7.3, "An arcade villain sets out to prove he can be a hero."),
+  m(900016, "Frozen II", 2019, 'PG', 103, ['Animation', 'Family', 'Fantasy'], 7.2, "Elsa follows a mysterious voice north to learn where her powers came from."),
+  m(900017, "Raya and the Last Dragon", 2021, 'PG', 107, ['Animation', 'Action', 'Family'], 7.8, "A lone warrior searches for the last dragon to reunite her land."),
+  m(900018, "Lilo & Stitch", 2002, 'PG', 85, ['Animation', 'Family', 'Comedy'], 7.5, "A lonely Hawaiian girl adopts a dog that is really an alien fugitive."),
+  m(900019, "Mulan", 1998, 'G', 88, ['Animation', 'Family', 'Adventure'], 7.9, "A young woman disguises herself as a soldier to take her father's place."),
+  m(900020, "Aladdin", 1992, 'G', 90, ['Animation', 'Family', 'Fantasy'], 7.7, "A street kid finds a lamp with a very talkative genie."),
+  m(900021, "Beauty and the Beast", 1991, 'G', 84, ['Animation', 'Family', 'Romance'], 7.7, "A book-loving young woman is held in an enchanted castle."),
+  m(900022, "The Little Mermaid", 1989, 'G', 83, ['Animation', 'Family', 'Fantasy'], 7.4, "A mermaid trades her voice for a chance to live on land."),
+  m(900023, "The Jungle Book", 1967, 'G', 78, ['Animation', 'Family', 'Adventure'], 7.3, "A boy raised by wolves travels the jungle with a bear and a panther."),
+  m(900024, "The Emperor's New Groove", 2000, 'G', 78, ['Animation', 'Family', 'Comedy'], 7.6, "A selfish emperor is turned into a llama."),
+  m(900025, "Hercules", 1997, 'G', 93, ['Animation', 'Family', 'Fantasy'], 7.5, "The son of Zeus must become a true hero to rejoin the gods."),
+  m(900026, "Tarzan", 1999, 'G', 88, ['Animation', 'Family', 'Adventure'], 7.4, "A man raised by gorillas meets other humans for the first time."),
+  m(900027, "The Nightmare Before Christmas", 1993, 'PG', 76, ['Animation', 'Family', 'Fantasy'], 7.8, "The Pumpkin King of Halloween Town decides to take over Christmas."),
+  m(900028, "How to Train Your Dragon 2", 2014, 'PG', 102, ['Animation', 'Family', 'Adventure'], 7.7, "Hiccup and Toothless discover a hidden cave of wild dragons."),
+  m(900029, "Kung Fu Panda", 2008, 'PG', 92, ['Animation', 'Action', 'Family'], 7.3, "A noodle-loving panda is chosen as the Dragon Warrior."),
+  m(900030, "Kung Fu Panda 2", 2011, 'PG', 90, ['Animation', 'Action', 'Family'], 7.0, "Po faces a peacock with a weapon that could end kung fu."),
+  m(900031, "Shrek 2", 2004, 'PG', 93, ['Animation', 'Family', 'Comedy'], 7.3, "Shrek meets Fiona's royal parents, and it goes badly."),
+  m(900032, "Puss in Boots: The Last Wish", 2022, 'PG', 102, ['Animation', 'Family', 'Adventure'], 8.2, "Down to his last life, Puss goes after a wishing star."),
+  m(900033, "Madagascar", 2005, 'PG', 86, ['Animation', 'Family', 'Comedy'], 6.9, "Four pampered zoo animals wash up on a wild island."),
+  m(900034, "Despicable Me", 2010, 'PG', 95, ['Animation', 'Family', 'Comedy'], 7.2, "A supervillain's plan to steal the moon is derailed by three orphans."),
+  m(900035, "The Lego Movie", 2014, 'PG', 100, ['Animation', 'Family', 'Comedy'], 7.4, "An ordinary Lego figure is mistaken for the chosen one."),
+  m(900036, "The Lego Batman Movie", 2017, 'PG', 104, ['Animation', 'Action', 'Comedy'], 7.2, "Batman has to learn to work with others to save Gotham."),
+  m(900037, "Spider-Man: Across the Spider-Verse", 2023, 'PG', 140, ['Animation', 'Action', 'Sci-Fi'], 8.3, "Miles is pulled into a multiverse of Spider-people with their own rules."),
+  m(900038, "The Mitchells vs. the Machines", 2021, 'PG', 114, ['Animation', 'Family', 'Comedy'], 7.9, "A quirky family's road trip is interrupted by a robot uprising."),
+  m(900039, "Cloudy with a Chance of Meatballs", 2009, 'PG', 90, ['Animation', 'Family', 'Comedy'], 6.6, "An inventor's machine makes food fall from the sky."),
+  m(900040, "The Iron Giant", 1999, 'PG', 86, ['Animation', 'Family', 'Sci-Fi'], 8.0, "A boy befriends a giant robot from space during the Cold War."),
+  m(900041, "Chicken Run", 2000, 'G', 84, ['Animation', 'Family', 'Comedy'], 6.8, "A flock of hens plots a great escape from the farm."),
+  m(900042, "Wallace & Gromit: The Curse of the Were-Rabbit", 2005, 'G', 85, ['Animation', 'Family', 'Comedy'], 7.1, "An inventor and his dog hunt a giant vegetable-eating beast."),
+  m(900043, "Fantastic Mr. Fox", 2009, 'PG', 87, ['Animation', 'Family', 'Comedy'], 7.5, "A sly fox can't resist one last raid on three mean farmers."),
+  m(900044, "Kubo and the Two Strings", 2016, 'PG', 101, ['Animation', 'Family', 'Adventure'], 7.6, "A boy with a magic instrument searches for his father's armor."),
+  m(900045, "Coraline", 2009, 'PG', 100, ['Animation', 'Family', 'Fantasy'], 7.9, "A girl finds a door to a better version of her life with a dark catch."),
+  m(900046, "The Wild Robot", 2024, 'PG', 102, ['Animation', 'Family', 'Sci-Fi'], 8.3, "A shipwrecked robot learns to survive on an island and raises a gosling."),
+  m(900047, "Wolfwalkers", 2020, 'PG', 103, ['Animation', 'Family', 'Fantasy'], 8.4, "A young hunter befriends a girl from a tribe that turns into wolves."),
+  m(900048, "Song of the Sea", 2014, 'PG', 93, ['Animation', 'Family', 'Fantasy'], 8.0, "A boy discovers his little sister is the last of the selkies."),
+  m(900049, "Klaus", 2019, 'PG', 96, ['Animation', 'Family', 'Comedy'], 8.2, "A spoiled postman and a reclusive toymaker start a holiday tradition."),
+  m(900050, "Kiki's Delivery Service", 1989, 'G', 103, ['Animation', 'Family', 'Fantasy'], 7.8, "A young witch starts a flying delivery business in a seaside town."),
+  m(900051, "Ponyo", 2008, 'G', 101, ['Animation', 'Family', 'Fantasy'], 7.7, "A goldfish princess longs to become human."),
+  m(900052, "Howl's Moving Castle", 2004, 'PG', 119, ['Animation', 'Family', 'Fantasy'], 8.4, "A girl cursed with old age finds a wizard's walking castle."),
+  m(900053, "Castle in the Sky", 1986, 'PG', 125, ['Animation', 'Family', 'Adventure'], 8.0, "Two kids race pirates and soldiers to a legendary floating city."),
+  m(900054, "Princess Mononoke", 1997, 'PG-13', 134, ['Animation', 'Adventure', 'Fantasy'], 8.3, "A cursed prince is caught in a war between forest gods and humans."),
+  m(900055, "The Prince of Egypt", 1998, 'PG', 99, ['Animation', 'Family', 'Drama'], 7.3, "Moses learns who he is and leads his people out of Egypt."),
+  m(900056, "Sing", 2016, 'PG', 108, ['Animation', 'Family', 'Music'], 7.1, "A koala tries to save his theater with a singing competition."),
+  m(900057, "The Super Mario Bros. Movie", 2023, 'PG', 92, ['Animation', 'Family', 'Adventure'], 7.6, "A Brooklyn plumber is pulled into the Mushroom Kingdom."),
+  m(900058, "Inside Out 2", 2024, 'PG', 96, ['Animation', 'Family', 'Comedy'], 7.6, "New emotions move in as Riley becomes a teenager."),
+  m(900059, "Brave", 2012, 'PG', 93, ['Animation', 'Family', 'Fantasy'], 7.0, "A headstrong Scottish princess accidentally curses her mother."),
+  m(900060, "The Peanuts Movie", 2015, 'G', 88, ['Animation', 'Family', 'Comedy'], 7.1, "Charlie Brown tries to impress the Little Red-Haired Girl."),
+  m(900061, "The Secret of NIMH", 1982, 'G', 82, ['Animation', 'Family', 'Fantasy'], 7.0, "A field mouse seeks help from a colony of super-smart rats."),
+  m(900062, "The Land Before Time", 1988, 'G', 69, ['Animation', 'Family', 'Adventure'], 7.1, "An orphaned young dinosaur leads his friends to the Great Valley."),
+  m(900063, "Star Wars", 1977, 'PG', 121, ['Adventure', 'Action', 'Sci-Fi'], 8.2, "A farm boy joins a rebellion against a galactic empire."),
+  m(900064, "The Empire Strikes Back", 1980, 'PG', 124, ['Adventure', 'Action', 'Sci-Fi'], 8.4, "The rebels scatter while Luke trains with a Jedi master."),
+  m(900065, "Return of the Jedi", 1983, 'PG', 132, ['Adventure', 'Action', 'Sci-Fi'], 7.9, "The rebels make a last stand as Luke confronts Darth Vader."),
+  m(900066, "Raiders of the Lost Ark", 1981, 'PG', 115, ['Adventure', 'Action'], 7.9, "An archaeologist races to find the Ark of the Covenant first."),
+  m(900067, "Indiana Jones and the Last Crusade", 1989, 'PG-13', 127, ['Adventure', 'Action'], 7.8, "Indy and his father search for the Holy Grail."),
+  m(900068, "Harry Potter and the Sorcerer's Stone", 2001, 'PG', 152, ['Adventure', 'Family', 'Fantasy'], 7.9, "An orphan learns he is a wizard and starts school at Hogwarts."),
+  m(900069, "Harry Potter and the Prisoner of Azkaban", 2004, 'PG', 141, ['Adventure', 'Family', 'Fantasy'], 8.0, "An escaped prisoner seems to be coming after Harry."),
+  m(900070, "The Lord of the Rings: The Fellowship of the Ring", 2001, 'PG-13', 178, ['Adventure', 'Fantasy', 'Action'], 8.4, "A hobbit sets out to destroy a ring of terrible power."),
+  m(900071, "The Wizard of Oz", 1939, 'G', 102, ['Family', 'Fantasy', 'Adventure'], 7.6, "A tornado carries a Kansas girl to a magical land."),
+  m(900072, "Mary Poppins", 1964, 'G', 139, ['Family', 'Comedy', 'Fantasy'], 7.6, "A magical nanny shakes up a buttoned-up London household."),
+  m(900073, "The Sound of Music", 1965, 'G', 174, ['Family', 'Music', 'Drama'], 7.7, "A spirited governess brings music to a strict captain's family."),
+  m(900074, "Willy Wonka & the Chocolate Factory", 1971, 'G', 100, ['Family', 'Fantasy'], 7.5, "Five golden tickets open the doors of a mysterious candy factory."),
+  m(900075, "Paddington", 2014, 'PG', 95, ['Family', 'Comedy'], 7.1, "A polite bear from Peru looks for a home in London."),
+  m(900076, "Babe", 1995, 'G', 91, ['Family', 'Comedy', 'Drama'], 6.3, "A piglet decides to become a sheepdog."),
+  m(900077, "The Sandlot", 1993, 'PG', 101, ['Family', 'Comedy'], 7.6, "A new kid finds his place on a neighborhood baseball team."),
+  m(900078, "Hook", 1991, 'PG', 142, ['Family', 'Adventure', 'Fantasy'], 6.8, "A grown-up Peter Pan returns to Neverland to rescue his kids."),
+  m(900079, "Jumanji", 1995, 'PG', 104, ['Family', 'Adventure', 'Fantasy'], 7.2, "A board game unleashes a jungle on a quiet town."),
+  m(900080, "Jumanji: Welcome to the Jungle", 2017, 'PG-13', 119, ['Adventure', 'Action', 'Comedy'], 6.8, "Four teens are sucked into a video game as its avatars."),
+  m(900081, "Honey, I Shrunk the Kids", 1989, 'PG', 93, ['Family', 'Comedy', 'Sci-Fi'], 6.4, "An inventor accidentally shrinks his kids and loses them in the yard."),
+  m(900082, "Mrs. Doubtfire", 1993, 'PG-13', 125, ['Comedy', 'Family', 'Drama'], 7.2, "A dad disguises himself as a nanny to be near his kids."),
+  m(900083, "The Parent Trap", 1998, 'PG', 128, ['Family', 'Comedy', 'Romance'], 7.1, "Twins separated at birth meet at camp and swap places."),
+  m(900084, "Matilda", 1996, 'PG', 98, ['Family', 'Comedy', 'Fantasy'], 7.0, "A brilliant girl with awful parents discovers she has powers."),
+  m(900085, "School of Rock", 2003, 'PG-13', 109, ['Comedy', 'Music'], 7.1, "A fake substitute teacher turns his class into a rock band."),
+  m(900086, "Elf", 2003, 'PG', 97, ['Comedy', 'Family', 'Fantasy'], 6.7, "A man raised at the North Pole goes to New York to find his dad."),
+  m(900087, "The Karate Kid", 1984, 'PG', 126, ['Drama', 'Family'], 7.2, "A bullied teen learns karate from an unlikely teacher."),
+  m(900088, "Ghostbusters", 1984, 'PG', 105, ['Comedy', 'Fantasy'], 7.5, "Three out-of-work scientists start a ghost removal business."),
+  m(900089, "Ferris Bueller's Day Off", 1986, 'PG-13', 103, ['Comedy'], 7.6, "A high schooler takes an epic sick day in Chicago."),
+  m(900090, "Big", 1988, 'PG', 104, ['Comedy', 'Fantasy', 'Family'], 7.2, "A boy wishes to be big and wakes up as an adult."),
+  m(900091, "Groundhog Day", 1993, 'PG', 101, ['Comedy', 'Fantasy', 'Romance'], 7.6, "A grumpy weatherman relives the same day again and again."),
+  m(900092, "The NeverEnding Story", 1984, 'PG', 94, ['Family', 'Fantasy', 'Adventure'], 7.1, "A boy reads a book that pulls him into its dying world."),
+  m(900093, "Labyrinth", 1986, 'PG', 101, ['Family', 'Fantasy', 'Adventure'], 7.2, "A teenager must solve a maze to rescue her baby brother."),
+  m(900094, "Pirates of the Caribbean: The Curse of the Black Pearl", 2003, 'PG-13', 143, ['Adventure', 'Fantasy', 'Action'], 7.8, "A blacksmith teams up with a pirate to save the governor's daughter."),
+  m(900095, "National Treasure", 2004, 'PG', 131, ['Adventure', 'Action'], 6.6, "A historian hunts a treasure hidden by the Founding Fathers."),
+  m(900096, "Night at the Museum", 2006, 'PG', 108, ['Family', 'Comedy', 'Fantasy'], 6.5, "A night guard learns the exhibits come alive after dark."),
+  m(900097, "Enchanted", 2007, 'PG', 107, ['Family', 'Comedy', 'Romance'], 6.8, "A fairy-tale princess is banished to real-life New York."),
+  m(900098, "The Chronicles of Narnia: The Lion, the Witch and the Wardrobe", 2005, 'PG', 143, ['Family', 'Adventure', 'Fantasy'], 7.1, "Four siblings step through a wardrobe into a frozen kingdom."),
+  m(900099, "Holes", 2003, 'PG', 117, ['Family', 'Adventure', 'Drama'], 6.9, "A boy at a desert detention camp digs up a family mystery."),
+  m(900100, "Remember the Titans", 2000, 'PG', 113, ['Drama'], 7.7, "A newly integrated high school football team learns to play as one."),
+  m(900101, "Hidden Figures", 2016, 'PG', 127, ['Drama'], 8.0, "Three mathematicians help NASA launch the first American into orbit."),
+  m(900102, "Apollo 13", 1995, 'PG', 140, ['Drama'], 7.4, "NASA scrambles to bring a crippled spacecraft home."),
+  m(900103, "October Sky", 1999, 'PG', 108, ['Drama', 'Family'], 7.6, "A coal miner's son starts building rockets."),
+  m(900104, "Akeelah and the Bee", 2006, 'PG', 112, ['Drama', 'Family'], 7.1, "An eleven-year-old from South L.A. aims for the national spelling bee."),
+  m(900105, "Spider-Man", 2002, 'PG-13', 121, ['Action', 'Sci-Fi'], 7.3, "A bitten high schooler learns what great power demands."),
+  m(900106, "Spider-Man 2", 2004, 'PG-13', 127, ['Action', 'Sci-Fi'], 7.3, "Peter Parker struggles to balance his life with being Spider-Man."),
+  m(900107, "Iron Man", 2008, 'PG-13', 126, ['Action', 'Sci-Fi'], 7.6, "A captured weapons maker builds a suit of armor to escape."),
+  m(900108, "Guardians of the Galaxy", 2014, 'PG-13', 121, ['Action', 'Sci-Fi', 'Comedy'], 7.9, "A band of misfits ends up protecting the galaxy."),
+  m(900109, "Black Panther", 2018, 'PG-13', 134, ['Action', 'Sci-Fi'], 7.4, "A new king must defend Wakanda's throne and its secret."),
+  m(900110, "Superman", 1978, 'PG', 143, ['Action', 'Sci-Fi'], 7.1, "An alien raised in Kansas becomes Earth's greatest protector."),
+  m(900111, "The Princess Diaries", 2001, 'G', 115, ['Comedy', 'Family', 'Romance'], 6.9, "An awkward teen finds out she is heir to a European throne."),
+  m(900112, "Close Encounters of the Third Kind", 1977, 'PG', 135, ['Sci-Fi', 'Drama'], 7.4, "An ordinary man becomes obsessed after an encounter with a UFO."),
+  m(900113, "The Truman Show", 1998, 'PG', 103, ['Comedy', 'Drama'], 8.1, "A man slowly realizes his whole life is a TV show."),
+  m(900114, "Galaxy Quest", 1999, 'PG', 102, ['Comedy', 'Sci-Fi'], 7.1, "Washed-up sci-fi actors are recruited by real aliens."),
+  m(900115, "The Muppet Movie", 1979, 'G', 95, ['Family', 'Comedy', 'Music'], 7.1, "Kermit heads to Hollywood and picks up friends along the way."),
+  m(900116, "The Muppet Christmas Carol", 1992, 'G', 86, ['Family', 'Comedy', 'Music'], 7.5, "The Muppets tell the story of Scrooge."),
+  m(900117, "Singin' in the Rain", 1952, 'G', 103, ['Comedy', 'Music', 'Romance'], 8.2, "A silent film star navigates Hollywood's leap to talkies."),
+  m(900118, "The Adventures of Robin Hood", 1938, 'PG', 102, ['Adventure', 'Romance'], 7.5, "An outlaw archer fights for the poor in Sherwood Forest."),
+  m(900119, "Chitty Chitty Bang Bang", 1968, 'G', 144, ['Family', 'Fantasy'], 6.9, "An inventor's flying car carries his family on an adventure."),
+  m(900120, "A Christmas Story", 1983, 'PG', 94, ['Comedy', 'Family'], 7.5, "All Ralphie wants for Christmas is a BB gun."),
+  m(900121, "Cool Runnings", 1993, 'PG', 98, ['Comedy', 'Family'], 7.0, "Four Jamaicans form their country's first bobsled team."),
+  m(900122, "Wonka", 2023, 'PG', 116, ['Family', 'Comedy', 'Fantasy'], 7.1, "A young Willy Wonka sets out to open his first chocolate shop."),
+  m(900123, "Sonic the Hedgehog", 2020, 'PG', 99, ['Action', 'Comedy', 'Family'], 7.3, "A super-fast blue hedgehog hides out in small-town Montana."),
+  m(900124, "Isle of Dogs", 2018, 'PG-13', 101, ['Animation', 'Adventure', 'Comedy'], 7.8, "A boy searches an island of exiled dogs for his own."),
+  m(24428, 'The Avengers', 2012, 'PG-13', 143, ['Sci-Fi', 'Action', 'Adventure'], 7.7, "Earth's mightiest heroes must learn to work together to stop an alien invasion."),
+];
+
+const seen = (stars) => ({ status: 'seen', stars });
+const again = (stars) => ({ status: 'again', stars });
+const unseen = { status: 'unseen', stars: null };
+const meh = { status: 'meh', stars: null };
+const pass = { status: 'pass', stars: null };
+
+// [tmdbId, parent, kid1, kid2] — null means "hasn't rated it yet".
+const SAMPLE_RATINGS = [
+  // Certified Family Favorites: everyone 4+, someone would rewatch.
+  [862, again(5), seen(5), seen(4.5)],
+  [354912, seen(4.5), again(5), seen(4)],
+  [9806, seen(4), seen(4.5), again(5)],
+  [10191, again(4.5), again(4.5), seen(4)],
+  // Top Picks: unseen by all three.
+  [346648, unseen, unseen, meh], // one shrug still counts, at a lower match
+  [324857, unseen, unseen, unseen],
+  // Top Picks: the parent wants to show the kids a favorite.
+  [105, again(5), unseen, unseen],
+  [2493, again(4.5), unseen, unseen],
+  [601, again(4), unseen, unseen],
+  // Compromise Queue: two are in, one hasn't weighed in.
+  [129, again(5), unseen, null],
+  [329, again(4.5), unseen, null],
+  [9340, null, unseen, unseen],
+  // Ruled out: someone gave it 1–2 stars, or said No thanks.
+  [109445, seen(3.5), seen(2), again(4.5)],
+  [771, seen(2), unseen, unseen],
+  [24428, unseen, unseen, pass], // a "No thanks" rules it out too
+  // Seen and liked, but nobody asked for a rewatch.
+  [277834, seen(4), seen(3.5), seen(4)],
+];
+
+export function demoEntries() {
+  const byId = Object.fromEntries(DEMO_CATALOG.map((movie) => [movie.id, movie]));
+  const entries = {};
+  for (const [id, parent, kid1, kid2] of SAMPLE_RATINGS) {
+    const ratings = {};
+    if (parent) ratings.parent = parent;
+    if (kid1) ratings.kid1 = kid1;
+    if (kid2) ratings.kid2 = kid2;
+    entries[id] = { movie: byId[id], ratings };
+  }
+  return entries;
+}

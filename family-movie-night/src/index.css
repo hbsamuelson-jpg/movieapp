@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Layout idea: one calm dark column. Everything is a numbered queue row; gold marks what's active, red marks the one main action. */
+@theme {
+  --color-gold: #F5C518;
+  --color-velvet: #B91C1C;
+  --color-house: #0F1117;
+  --color-seat: #171A23;
+  --color-aisle: #262B3A;
+  --color-cream: #F3E9D2;
+  --color-dim: #8F96AB;
+  --font-display: "Limelight", "Rockwell", Georgia, serif;
+  --font-sans: "Karla", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-house);
+  color: var(--color-cream);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3 { text-wrap: balance; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }
+
+/* Ticket stub: notched sides and a perforated tear line. */
+.stub {
+  --notch: 4px;
+  -webkit-mask: radial-gradient(circle var(--notch) at 0 50%, transparent 97%, #000) 0 0 / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 50%, transparent 97%, #000) 100% 0 / 51% 100% no-repeat;
+  mask: radial-gradient(circle var(--notch) at 0 50%, transparent 97%, #000) 0 0 / 51% 100% no-repeat,
+    radial-gradient(circle var(--notch) at 100% 50%, transparent 97%, #000) 100% 0 / 51% 100% no-repeat;
+}
+.perf { border-left: 1px dashed currentColor; }
+
+.star-pop { animation: star-pop 0.35s cubic-bezier(0.3, 1.8, 0.5, 1); }
+@keyframes star-pop { 0% { transform: scale(0.6) rotate(-12deg); } 100% { transform: scale(1) rotate(0); } }
+
+.sheet-in { animation: sheet-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+
+.card-in { animation: card-in 0.24s ease-out; }
+@keyframes card-in { from { transform: translateX(24px); opacity: 0.2; } to { transform: none; opacity: 1; } }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+}
+
+input[type="search"]::-webkit-search-cancel-button { display: none; }

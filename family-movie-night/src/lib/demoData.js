@@ -1,4 +1,4 @@
-// Demo Mode data: a small built-in catalog plus sample ratings for all three profiles.
+// Built-in movie list, used only when there is no TMDB key. No ratings ship with the app.
 // The first 27 use real TMDB ids; the rest use placeholder ids (900001+). Scores and runtimes are approximate.
 // Posters are left empty on purpose — the app draws a vintage title card instead.
 
@@ -22,7 +22,6 @@ export const DEMO_CATALOG = [
   m(109445, 'Frozen', 2013, 'PG', 102, ['Animation', 'Family', 'Adventure', 'Fantasy'], 7.2, 'A fearless princess sets off to find her sister, whose icy powers have trapped the kingdom in winter.'),
   m(771, 'Home Alone', 1990, 'PG', 103, ['Comedy', 'Family'], 7.4, 'An eight-year-old left behind at Christmas defends his house from two burglars.'),
   m(277834, 'Moana', 2016, 'PG', 107, ['Animation', 'Adventure', 'Family', 'Comedy'], 7.6, 'A chief\'s daughter sails beyond the reef with a demigod to save her island.'),
-  // Not yet rated by anyone — these fill out Rate and Search.
   m(12, 'Finding Nemo', 2003, 'G', 100, ['Animation', 'Family'], 7.8, 'A timid clownfish crosses the ocean to find his captured son.'),
   m(8587, 'The Lion King', 1994, 'G', 88, ['Animation', 'Family', 'Drama'], 8.3, 'A young lion prince flees his kingdom, then returns to take his place.'),
   m(14160, 'Up', 2009, 'PG', 96, ['Animation', 'Comedy', 'Family', 'Adventure'], 8.0, 'A widower ties thousands of balloons to his house and floats to South America with an accidental stowaway.'),
@@ -159,48 +158,3 @@ export const DEMO_CATALOG = [
   m(900124, "Isle of Dogs", 2018, 'PG-13', 101, ['Animation', 'Adventure', 'Comedy'], 7.8, "A boy searches an island of exiled dogs for his own."),
   m(24428, 'The Avengers', 2012, 'PG-13', 143, ['Sci-Fi', 'Action', 'Adventure'], 7.7, "Earth's mightiest heroes must learn to work together to stop an alien invasion."),
 ];
-
-const seen = (stars) => ({ status: 'seen', stars });
-const again = (stars) => ({ status: 'again', stars });
-const unseen = { status: 'unseen', stars: null };
-const meh = { status: 'meh', stars: null };
-const pass = { status: 'pass', stars: null };
-
-// [tmdbId, parent, kid1, kid2] — null means "hasn't rated it yet".
-const SAMPLE_RATINGS = [
-  // Certified Family Favorites: everyone 4+, someone would rewatch.
-  [862, again(5), seen(5), seen(4.5)],
-  [354912, seen(4.5), again(5), seen(4)],
-  [9806, seen(4), seen(4.5), again(5)],
-  [10191, again(4.5), again(4.5), seen(4)],
-  // Top Picks: unseen by all three.
-  [346648, unseen, unseen, meh], // one shrug still counts, at a lower match
-  [324857, unseen, unseen, unseen],
-  // Top Picks: the parent wants to show the kids a favorite.
-  [105, again(5), unseen, unseen],
-  [2493, again(4.5), unseen, unseen],
-  [601, again(4), unseen, unseen],
-  // Compromise Queue: two are in, one hasn't weighed in.
-  [129, again(5), unseen, null],
-  [329, again(4.5), unseen, null],
-  [9340, null, unseen, unseen],
-  // Ruled out: someone gave it 1–2 stars, or said No thanks.
-  [109445, seen(3.5), seen(2), again(4.5)],
-  [771, seen(2), unseen, unseen],
-  [24428, unseen, unseen, pass], // a "No thanks" rules it out too
-  // Seen and liked, but nobody asked for a rewatch.
-  [277834, seen(4), seen(3.5), seen(4)],
-];
-
-export function demoEntries() {
-  const byId = Object.fromEntries(DEMO_CATALOG.map((movie) => [movie.id, movie]));
-  const entries = {};
-  for (const [id, parent, kid1, kid2] of SAMPLE_RATINGS) {
-    const ratings = {};
-    if (parent) ratings.parent = parent;
-    if (kid1) ratings.kid1 = kid1;
-    if (kid2) ratings.kid2 = kid2;
-    entries[id] = { movie: byId[id], ratings };
-  }
-  return entries;
-}

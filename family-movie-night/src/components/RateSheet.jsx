@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { enrich } from '../lib/tmdb.js';
 import { Avatar, CertBadge, formatRuntime, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
 
-/** Bottom sheet: movie details plus the active profile's rating. */
-export default function RateSheet({ movie: initial, entry, profiles, active, onSave, onClose }) {
+/** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
+export default function RateSheet({ movie: initial, entry, members, me, listed, onToggleListed, onSave, onClose }) {
   const [movie, setMovie] = useState(entry?.movie?.detailed ? entry.movie : initial);
-  const mine = entry?.ratings?.[active.id];
+  const mine = entry?.ratings?.[me];
   const [status, setStatus] = useState(mine?.status || null);
   const [stars, setStars] = useState(mine?.stars || 0);
 
@@ -27,10 +27,9 @@ export default function RateSheet({ movie: initial, entry, profiles, active, onS
   const pickStars = (v) => { setStars(v); if (!watched) setStatus('seen'); };
   const pickNotWatched = (s) => { setStatus(s); setStars(0); };
   const canSave = status && (!watched || stars > 0);
-  const save = () => { onSave(movie, active.id, { status, stars: watched ? stars : null }); onClose(); };
-  const clear = () => { onSave(movie, active.id, null); onClose(); };
-
-  const others = profiles.filter((p) => p.id !== active.id);
+  const save = () => { onSave(movie, { status, stars: watched ? stars : null }); onClose(); };
+  const clear = () => { onSave(movie, null); onClose(); };
+  const others = members.filter((m) => m.id !== me);
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center sm:p-6" onClick={onClose}>
@@ -52,10 +51,9 @@ export default function RateSheet({ movie: initial, entry, profiles, active, onS
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
-          <Avatar avatar={active.avatar} size={26} />
-          <span className="font-bold text-cream">{active.name}'s take</span>
-        </div>
+        <button type="button" onClick={() => onToggleListed(movie)} aria-pressed={listed} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-bold ${listed ? 'border-gold bg-gold text-house' : 'border-aisle text-cream'}`}>
+          {listed ? <><Check size={16} /> On tonight's shortlist</> : <><Plus size={16} /> Put it up for tonight</>}
+        </button>
 
         <div className="flex flex-col gap-2">
           <div className="text-xs font-bold uppercase tracking-widest text-dim">Watched it</div>
@@ -89,15 +87,17 @@ export default function RateSheet({ movie: initial, entry, profiles, active, onS
           <button type="button" disabled={!canSave} onClick={save} className="flex-1 rounded-lg bg-velvet px-4 py-3 font-bold text-cream transition hover:bg-red-600 disabled:bg-aisle disabled:text-dim">Save</button>
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-aisle pt-3">
-          {others.map((p) => (
-            <div key={p.id} className="flex items-center gap-2 text-sm">
-              <Avatar avatar={p.avatar} size={22} />
-              <span className="w-20 truncate text-cream">{p.name}</span>
-              {entry?.ratings?.[p.id] ? <StatusStub rating={entry.ratings[p.id]} /> : <span className="text-xs text-dim">No vote yet</span>}
-            </div>
-          ))}
-        </div>
+        {others.length > 0 && (
+          <div className="flex flex-col gap-2 border-t border-aisle pt-3">
+            {others.map((m) => (
+              <div key={m.id} className="flex items-center gap-2 text-sm">
+                <Avatar member={m} size={22} />
+                <span className="w-24 truncate text-cream">{m.name}</span>
+                {entry?.ratings?.[m.id] ? <StatusStub rating={entry.ratings[m.id]} /> : <span className="text-xs text-dim">No vote yet</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

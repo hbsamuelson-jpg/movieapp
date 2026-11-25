@@ -7,20 +7,22 @@ export const firebaseConfig = {
   appId: env.VITE_FIREBASE_APP_ID,
 };
 
-/** True when all Firebase keys are present and Demo Mode isn't forced. */
+/** True when all Firebase keys are present. Without them the app runs for one person on one device. */
 export const hasFirebase =
   env.VITE_DEMO_MODE !== 'true' && Object.values(firebaseConfig).every(Boolean);
 
 export const tmdbKey = env.VITE_TMDB_API_KEY || '';
-/** True when a TMDB key is present. Without it, browsing uses the built-in demo catalog. */
+/** True when a TMDB key is present. Without it, the app uses a built-in list of 150 movies with no posters. */
 export const hasTmdb = Boolean(tmdbKey);
 
-export const PROFILE_IDS = ['parent', 'kid1', 'kid2'];
+export const CERTS = ['G', 'PG', 'PG-13', 'R'];
+export const LOCAL_MEMBER = { id: 'me', name: 'Me', photo: null };
 
-export const DEFAULT_PROFILES = [
-  { id: 'parent', name: 'Parent', avatar: 'director' },
-  { id: 'kid1', name: 'Kid 1', avatar: 'popcorn' },
-  { id: 'kid2', name: 'Kid 2', avatar: 'clapper' },
-];
-
-export const CERTS = ['G', 'PG', 'PG-13'];
+export const pref = {
+  get(key, fallback) {
+    try { const v = localStorage.getItem(`fmn-${key}`); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(`fmn-${key}`, JSON.stringify(value)); } catch { /* fine without it */ }
+  },
+};

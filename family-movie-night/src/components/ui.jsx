@@ -1,37 +1,22 @@
 import { useState } from 'react';
-import {
-  Bookmark, Candy, Clapperboard, Drama, Eye, Film, Ghost, Glasses, Meh, Megaphone, Popcorn,
-  Projector, Repeat, Rocket, Star, ThumbsDown, Ticket,
-} from 'lucide-react';
+import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown } from 'lucide-react';
 import { posterUrl } from '../lib/tmdb.js';
 
-/* ---------- Avatars ---------- */
+/* ---------- People ---------- */
 
-export const AVATARS = {
-  director: { icon: Megaphone, label: 'Director', bg: '#B91C1C' },
-  popcorn: { icon: Popcorn, label: 'Popcorn', bg: '#D97706' },
-  clapper: { icon: Clapperboard, label: 'Clapperboard', bg: '#0E7490' },
-  reel: { icon: Film, label: 'Film Reel', bg: '#6D28D9' },
-  star: { icon: Star, label: 'Movie Star', bg: '#BE185D' },
-  ticket: { icon: Ticket, label: 'Ticket Taker', bg: '#15803D' },
-  glasses: { icon: Glasses, label: '3D Glasses', bg: '#1D4ED8' },
-  projector: { icon: Projector, label: 'Projectionist', bg: '#475569' },
-  drama: { icon: Drama, label: 'Drama Masks', bg: '#9333EA' },
-  rocket: { icon: Rocket, label: 'Sci-Fi Hero', bg: '#0F766E' },
-  ghost: { icon: Ghost, label: 'Friendly Ghost', bg: '#4338CA' },
-  candy: { icon: Candy, label: 'Candy Counter', bg: '#DB2777' },
-};
+const AVATAR_COLORS = ['#B91C1C', '#D97706', '#0E7490', '#6D28D9', '#15803D', '#BE185D', '#1D4ED8', '#0F766E'];
+const hash = (text) => [...String(text)].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
-export function Avatar({ avatar, size = 40, ring = false }) {
-  const a = AVATARS[avatar] || AVATARS.reel;
-  const Icon = a.icon;
+/** A person's Google photo, or their initial on a colour of their own. */
+export function Avatar({ member, size = 32, ring = false, dim = false }) {
+  const [failed, setFailed] = useState(false);
+  const cls = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ${ring ? 'ring-2 ring-gold ring-offset-2 ring-offset-house' : ''} ${dim ? 'opacity-40' : ''}`;
+  const style = { width: size, height: size, fontSize: Math.round(size * 0.45), background: AVATAR_COLORS[hash(member.id) % AVATAR_COLORS.length] };
   return (
-    <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-full text-white ${ring ? 'ring-2 ring-gold ring-offset-2 ring-offset-house' : ''}`}
-      style={{ width: size, height: size, background: a.bg }}
-      aria-hidden="true"
-    >
-      <Icon size={Math.round(size * 0.55)} strokeWidth={2} />
+    <span className={cls} style={style} title={member.name}>
+      {member.photo && !failed
+        ? <img src={member.photo} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
+        : (member.name || '?').slice(0, 1).toUpperCase()}
     </span>
   );
 }
@@ -43,22 +28,14 @@ const PALETTES = [
   ['#581C87', '#1E0A33'], ['#14532D', '#07200F'], ['#78350F', '#241004'],
 ];
 
-/** TMDB poster when there is one; otherwise a vintage title card drawn in CSS. */
-export function Poster({ movie, className = '' }) {
+/** TMDB poster when there is one; otherwise a title card drawn in CSS. */
+export function Poster({ movie, size = 'w342', className = '' }) {
   const [failed, setFailed] = useState(false);
-  const src = posterUrl(movie.poster);
+  const src = posterUrl(movie.poster, size);
   if (src && !failed) {
-    return (
-      <img
-        src={src}
-        alt={`${movie.title} poster`}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        className={`aspect-[2/3] w-full rounded-md object-cover ${className}`}
-      />
-    );
+    return <img src={src} alt={`${movie.title} poster`} loading="lazy" onError={() => setFailed(true)} className={`aspect-[2/3] w-full rounded-md object-cover ${className}`} />;
   }
-  const [a, b] = PALETTES[Math.abs(Number(movie.id) || movie.title.length) % PALETTES.length];
+  const [a, b] = PALETTES[hash(movie.id) % PALETTES.length];
   return (
     <div
       className={`@container relative flex aspect-[2/3] w-full flex-col items-center justify-between overflow-hidden rounded-md p-[8%] text-center ${className}`}
@@ -90,11 +67,7 @@ export function StarRating({ value = 0, onChange, size = 36, label = 'Star ratin
         return (
           <span key={n} className="relative inline-block" style={{ width: size, height: size }}>
             <Star size={size} className="absolute inset-0 text-aisle" fill="currentColor" strokeWidth={0} />
-            <span
-              key={fill ? popKey : 'empty'}
-              className={`absolute inset-y-0 left-0 overflow-hidden ${fill ? 'star-pop' : ''}`}
-              style={{ width: `${fill}%` }}
-            >
+            <span key={fill ? popKey : 'empty'} className={`absolute inset-y-0 left-0 overflow-hidden ${fill ? 'star-pop' : ''}`} style={{ width: `${fill}%` }}>
               <Star size={size} className="text-gold drop-shadow-[0_0_6px_rgba(245,197,24,0.55)]" fill="currentColor" strokeWidth={0} />
             </span>
             {onChange && (
@@ -110,33 +83,24 @@ export function StarRating({ value = 0, onChange, size = 36, label = 'Star ratin
   );
 }
 
-export function MiniStars({ stars }) {
-  return (
-    <span className="inline-flex items-center gap-0.5 font-bold tabular-nums text-gold">
-      <Star size={12} fill="currentColor" strokeWidth={0} />
-      {stars % 1 ? stars.toFixed(1) : stars}
-    </span>
-  );
-}
-
-/* ---------- Status ticket stubs ---------- */
+/* ---------- Status ---------- */
 
 export const STATUS = {
   seen: { label: 'Watched', icon: Eye, cls: 'bg-aisle text-cream', glyph: null },
   again: { label: 'Watch again', icon: Repeat, cls: 'bg-gold text-house', glyph: null },
   unseen: { label: 'Want to', icon: Bookmark, cls: 'bg-cream text-house', glyph: '+' },
-  meh: { label: 'Indifferent', icon: Meh, cls: 'bg-aisle text-dim', glyph: '~' },
-  pass: { label: 'No thanks', icon: ThumbsDown, cls: 'bg-velvet/30 text-cream', glyph: '\u00d7' },
+  meh: { label: "Don't care", icon: Meh, cls: 'bg-aisle text-dim', glyph: '~' },
+  pass: { label: 'No thanks', icon: ThumbsDown, cls: 'bg-velvet/30 text-cream', glyph: '×' },
 };
-export const WATCHED = ['seen', 'again'];
 export const NOT_WATCHED = ['unseen', 'meh', 'pass'];
+const starText = (stars) => (stars % 1 ? stars.toFixed(1) : stars);
 
 export function StatusStub({ rating }) {
   if (!rating) return null;
   const s = STATUS[rating.status];
   const Icon = s.icon;
   return (
-    <span className={`stub inline-flex items-center text-[11px] font-bold uppercase tracking-wide ${s.cls}`}>
+    <span className={`stub inline-flex shrink-0 items-center text-[11px] font-bold uppercase tracking-wide ${s.cls}`}>
       <span className="inline-flex items-center gap-1 py-1 pl-3 pr-2">
         <Icon size={12} strokeWidth={2.5} />
         {s.label}
@@ -144,7 +108,7 @@ export function StatusStub({ rating }) {
       {rating.stars ? (
         <span className="perf inline-flex items-center gap-0.5 py-1 pl-2 pr-3 tabular-nums">
           <Star size={11} fill="currentColor" strokeWidth={0} />
-          {rating.stars % 1 ? rating.stars.toFixed(1) : rating.stars}
+          {starText(rating.stars)}
         </span>
       ) : (
         <span className="pr-1" />
@@ -155,26 +119,26 @@ export function StatusStub({ rating }) {
 
 export function CertBadge({ cert }) {
   if (!cert) return null;
-  return <span className="rounded border border-cream/60 px-1.5 py-px text-[10px] font-bold leading-4 tracking-wide text-dim">{cert}</span>;
+  return <span className="shrink-0 rounded border border-dim/70 px-1.5 py-px text-[10px] font-bold leading-4 tracking-wide text-dim">{cert}</span>;
 }
 
 export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m` : null);
 
-/* ---------- Queue rows ---------- */
+/* ---------- Rows ---------- */
 
-/** One small avatar per family member who has weighed in, badged with their stars or stance. */
-export function FamilyDots({ entry, profiles }) {
+/** One small avatar per person, badged with their stars or stance. A dashed ring means no vote yet. */
+export function MemberDots({ entry, members }) {
   return (
     <span className="flex shrink-0 gap-1.5">
-      {profiles.map((p) => {
-        const r = entry?.ratings?.[p.id];
-        if (!r) return <span key={p.id} className="h-6 w-6 rounded-full border border-dashed border-aisle" title={`${p.name}: no vote yet`} />;
+      {members.map((m) => {
+        const r = entry?.ratings?.[m.id];
+        if (!r) return <span key={m.id} className="h-6 w-6 rounded-full border border-dashed border-aisle" title={`${m.name}: no vote yet`} />;
         const s = STATUS[r.status];
         return (
-          <span key={p.id} className={`relative ${r.status === 'pass' || r.status === 'meh' ? 'opacity-50' : ''}`} title={`${p.name}: ${s.label}${r.stars ? `, ${r.stars} stars` : ''}`}>
-            <Avatar avatar={p.avatar} size={24} />
+          <span key={m.id} className="relative" title={`${m.name}: ${s.label}${r.stars ? `, ${r.stars} stars` : ''}`}>
+            <Avatar member={m} size={24} dim={r.status === 'pass' || r.status === 'meh'} />
             <span className={`absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold leading-none ${r.status === 'again' ? 'bg-gold text-house' : r.stars ? 'bg-house text-gold ring-1 ring-aisle' : 'bg-cream text-house'}`}>
-              {r.stars ? (r.stars % 1 ? r.stars.toFixed(1) : r.stars) : s.glyph}
+              {r.stars ? starText(r.stars) : s.glyph}
             </span>
           </span>
         );
@@ -183,30 +147,33 @@ export function FamilyDots({ entry, profiles }) {
   );
 }
 
-/** A queue row: position, thumbnail, title and facts, then whatever goes on the right. */
-export function MovieRow({ movie, index, onOpen, note, right }) {
+/** A list row: position, thumbnail, title and facts. `aside` sits inside the tap target, `action` is its own control. */
+export function MovieRow({ movie, index, onOpen, note, aside, action }) {
   const facts = [movie.year, movie.runtime && formatRuntime(movie.runtime), (movie.genres || []).slice(0, 2).join(', ')].filter(Boolean);
   return (
-    <li>
-      <button type="button" onClick={() => onOpen(movie)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition hover:bg-seat active:bg-seat">
+    <li className="flex items-center gap-1">
+      <button type="button" onClick={() => onOpen(movie)} className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2.5 text-left transition hover:bg-seat active:bg-seat">
         {index != null && <span className="w-5 shrink-0 text-right text-sm font-bold tabular-nums text-dim">{index}</span>}
-        <span className="w-10 shrink-0"><Poster movie={movie} className="rounded-sm" /></span>
+        <span className="w-10 shrink-0"><Poster movie={movie} size="w92" className="rounded-sm" /></span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2">
             <span className="truncate font-bold text-cream">{movie.title}</span>
             <CertBadge cert={movie.cert} />
           </span>
-          <span className="block truncate text-xs text-dim">{facts.join(' \u00b7 ')}</span>
+          <span className="block truncate text-xs text-dim">{facts.join(' · ')}</span>
           {note && <span className="mt-0.5 block truncate text-xs">{note}</span>}
         </span>
-        {right}
+        {aside}
       </button>
+      {action}
     </li>
   );
 }
 
-export const Chip = ({ on, onClick, children }) => (
-  <button type="button" aria-pressed={on} onClick={onClick} className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition ${on ? 'border-gold bg-gold text-house' : 'border-aisle text-cream hover:border-dim'}`}>
+export const Chip = ({ on, onClick, children, ...rest }) => (
+  <button type="button" aria-pressed={on} onClick={onClick} className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition ${on ? 'border-gold bg-gold text-house' : 'border-aisle text-cream hover:border-dim'}`} {...rest}>
     {children}
   </button>
 );
+
+export const Notice = ({ children }) => <p className="rounded-lg border border-velvet bg-velvet/15 p-3 text-sm text-cream">{children}</p>;

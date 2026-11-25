@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { hasTmdb } from '../lib/config.js';
 import { searchMovies } from '../lib/tmdb.js';
-import { FamilyDots, MovieRow } from './ui.jsx';
+import { MemberDots, MovieRow, Notice } from './ui.jsx';
 
 /** Find one specific movie and rate it. */
-export default function Browse({ entries, profiles, onOpen }) {
+export default function Browse({ entries, members, onOpen }) {
   const [query, setQuery] = useState('');
   const [movies, setMovies] = useState([]);
   const [state, setState] = useState('idle'); // idle | loading | ready | error
@@ -34,14 +34,14 @@ export default function Browse({ entries, profiles, onOpen }) {
       </div>
 
       {state === 'idle' && <p className="py-10 text-center text-sm text-dim">Type a title to find a movie and rate it.</p>}
-      {state === 'error' && <p className="rounded-lg border border-velvet bg-velvet/15 p-4 text-sm text-cream">{error}</p>}
+      {state === 'error' && <Notice>{error}</Notice>}
       {state === 'loading' && <p className="py-10 text-center text-sm text-dim">Searching…</p>}
       {state === 'ready' && movies.length === 0 && (
-        <p className="py-10 text-center text-sm text-dim">No movies match “{query}”.{!hasTmdb && ' Demo Mode only searches the built-in list. Add a TMDB key to search everything.'}</p>
+        <p className="py-10 text-center text-sm text-dim">No movies match “{query}”.{!hasTmdb && ' Without a TMDB key, search only covers the built-in list.'}</p>
       )}
       {state === 'ready' && movies.length > 0 && (
         <ol className="-mx-2 flex flex-col divide-y divide-aisle/60">
-          {movies.map((m) => <MovieRow key={m.id} movie={entries[m.id]?.movie || m} onOpen={onOpen} right={<FamilyDots entry={entries[m.id]} profiles={profiles} />} />)}
+          {movies.map((m) => <MovieRow key={m.id} movie={entries[m.id]?.movie || m} onOpen={onOpen} aside={<MemberDots entry={entries[m.id]} members={members} />} />)}
         </ol>
       )}
     </div>

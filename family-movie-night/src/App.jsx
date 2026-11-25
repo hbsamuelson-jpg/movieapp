@@ -1,119 +1,115 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ListOrdered, LogOut, Search, Settings2, Star, Ticket } from 'lucide-react';
+import { Popcorn, Search, Star, Ticket } from 'lucide-react';
 import Browse from './components/Browse.jsx';
-import MyTickets from './components/MyTickets.jsx';
-import Profiles from './components/Profiles.jsx';
-import RateSheet from './components/RateSheet.jsx';
-import Queue from './components/Queue.jsx';
+import Group from './components/Group.jsx';
+import Mine from './components/Mine.jsx';
 import Rate from './components/Rate.jsx';
-import { Avatar } from './components/ui.jsx';
-import { applyUpdate, buildLabel, watchForUpdates } from './lib/autoUpdate.js';
-import { hasFirebase } from './lib/config.js';
-import { signInWithGoogle, signOutUser, watchAuth } from './lib/firebase.js';
-import { createFirestoreStore, createLocalStore } from './lib/store.js';
+import RateSheet from './components/RateSheet.jsx';
+import Tonight from './components/Tonight.jsx';
+import { Avatar, Notice } from './components/ui.jsx';
+import { applyUpdate, watchForUpdates } from './lib/autoUpdate.js';
+import { hasFirebase, pref } from './lib/config.js';
+import { createGroup, joinGroup, leaveGroup, signInWithGoogle, signOutUser, watchAuth, watchMyGroup } from './lib/firebase.js';
+import { createGroupStore, createLocalStore } from './lib/store.js';
 import { enrich } from './lib/tmdb.js';
 
 const TABS = [
-  { id: 'queue', label: 'Queue', icon: ListOrdered },
+  { id: 'tonight', label: 'Tonight', icon: Popcorn },
   { id: 'rate', label: 'Rate', icon: Star },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'mine', label: 'Mine', icon: Ticket },
 ];
 
-const remembered = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
-const remember = (key, value) => { try { localStorage.setItem(key, value); } catch { /* fine without it */ } };
+// An invite link looks like https://your-site/?join=ABC123. Remember the code across the sign-in step.
+const inviteCode = (() => {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('join');
+    if (fromUrl) sessionStorage.setItem('fmn-join', fromUrl);
+    return fromUrl || sessionStorage.getItem('fmn-join') || '';
+  } catch { return ''; }
+})();
 
-let localStore; // one shared demo store
+let localStore; // one shared on-device store
 
 export default function App() {
-  // undefined = still checking, null = signed out
+  // user: undefined = still checking, null = signed out
   const [user, setUser] = useState(hasFirebase ? undefined : null);
-  const [demo, setDemo] = useState(!hasFirebase);
+  const [local, setLocal] = useState(!hasFirebase);
+  // groupId: undefined = still checking, null = signed in but not in a group yet
+  const [groupId, setGroupId] = useState(undefined);
   const [data, setData] = useState(null);
-  const [syncError, setSyncError] = useState('');
-  const [signInError, setSignInError] = useState('');
-  const [tab, setTab] = useState('queue');
-  const [activeId, setActiveId] = useState(() => remembered('fmn-active-profile') || 'parent');
-  const [editing, setEditing] = useState(false);
+  const [problem, setProblem] = useState('');
+  const [tab, setTab] = useState('tonight');
+  const [showGroup, setShowGroup] = useState(false);
   const [open, setOpen] = useState(null);
+  const [includeR, setIncludeR] = useState(() => pref.get('include-r', false));
   const [updateReady, setUpdateReady] = useState(false);
 
   useEffect(() => watchForUpdates(() => setUpdateReady(true)), []);
+  useEffect(() => watchAuth((u) => { setUser(u || null); if (u) setLocal(false); }), []);
 
-  useEffect(() => watchAuth((u) => setUser(u || null)), []);
+  useEffect(() => {
+    setGroupId(undefined);
+    if (!user) return undefined;
+    return watchMyGroup(user.uid, setGroupId, (e) => setProblem(explain(e)));
+  }, [user]);
 
   const store = useMemo(() => {
-    if (demo) return (localStore ||= createLocalStore());
-    return user ? createFirestoreStore(user.uid) : null;
-  }, [demo, user]);
+    if (local) return (localStore ||= createLocalStore());
+    return user && groupId ? createGroupStore(groupId, user.uid) : null;
+  }, [local, user, groupId]);
 
   useEffect(() => {
     setData(null);
-    setSyncError('');
+    setProblem('');
     if (!store) return undefined;
-    return store.subscribe(setData, (e) =>
-      setSyncError(e.code === 'permission-denied' ? 'Firestore refused access. Publish the rules from firestore.rules (see README, step 4).' : e.message));
+    return store.subscribe(setData, (e) => setProblem(explain(e)));
   }, [store]);
 
-  const rate = useCallback((movie, profileId, rating) => {
-    store.setRating(movie, profileId, rating);
-    // List results don't carry runtime or MPAA rating; fetch them once so the filters work.
+  const rate = useCallback((movie, rating) => {
+    store.setRating(movie, rating);
+    // List results don't carry runtime or MPAA rating; fetch them once so filters and taste work.
     if (rating && !movie.detailed) enrich(movie).then((full) => full.detailed && store.updateMovie(full));
   }, [store]);
-
-  const signIn = async () => {
-    setSignInError('');
-    try { await signInWithGoogle(); } catch (e) {
-      if (e.code !== 'auth/popup-closed-by-user') setSignInError(e.code === 'auth/unauthorized-domain' ? 'This domain is not authorized for sign-in. Add it under Firebase Auth → Settings → Authorized domains.' : e.message);
-    }
-  };
 
   /* ----- Gate screens ----- */
 
   if (user === undefined) return <Shell><Centered>Loading…</Centered></Shell>;
-
-  if (!store) {
-    return (
-      <Shell>
-        <div className="mx-auto flex max-w-sm flex-col items-center gap-5 py-12 text-center">
-          <p className="text-cream/90">Each of you rates movies. The queue shows what all three of you will happily watch.</p>
-          <button type="button" onClick={signIn} className="flex w-full items-center justify-center gap-3 rounded-lg bg-cream px-4 py-3 font-bold text-house hover:brightness-95">
-            <GoogleG /> Sign in with Google
-          </button>
-          {signInError && <p className="w-full rounded-lg border border-velvet bg-velvet/15 p-3 text-sm">{signInError}</p>}
-          <button type="button" onClick={() => setDemo(true)} className="text-sm text-dim underline hover:text-cream">Try the demo without signing in</button>
-        </div>
-      </Shell>
-    );
-  }
-
-  if (syncError) return <Shell><Centered>{syncError}</Centered></Shell>;
+  if (!user && !local) return <Shell><SignIn onLocal={() => setLocal(true)} /></Shell>;
+  if (user && !local && groupId === undefined && !problem) return <Shell><Centered>Loading…</Centered></Shell>;
+  if (user && !local && groupId === null) return <Shell><Onboard user={user} /></Shell>;
+  if (problem) return <Shell><div className="mx-auto flex max-w-md flex-col gap-3 py-10"><Notice>{problem}</Notice>{user && <button type="button" onClick={signOutUser} className="self-start text-sm text-dim underline">Sign out</button>}</div></Shell>;
   if (!data) return <Shell><Centered>Loading your ratings…</Centered></Shell>;
 
-  const { profiles, entries } = data;
-  const active = profiles.find((p) => p.id === activeId) || profiles[0];
-  const pick = (id) => { setActiveId(id); remember('fmn-active-profile', id); };
+  const { members, entries, shortlist, group } = data;
+  const me = store.me;
+  const myself = members.find((m) => m.id === me) || { id: me, name: 'Me', photo: null };
+  const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
+  const toggleListed = (movie) => store.setShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
+  const go = (id) => { setTab(id); setShowGroup(false); };
 
   return (
     <Shell
       right={
-        <div className="flex items-center gap-2" role="group" aria-label="Who is rating">
-          {profiles.map((p) => (
-            <button key={p.id} type="button" onClick={() => pick(p.id)} aria-pressed={p.id === active.id} aria-label={`Rate as ${p.name}`} title={p.name} className={`rounded-full transition ${p.id === active.id ? '' : 'opacity-40 hover:opacity-80'}`}>
-              <Avatar avatar={p.avatar} size={32} ring={p.id === active.id} />
-            </button>
-          ))}
-        </div>
+        <button type="button" onClick={() => setShowGroup((v) => !v)} aria-label="Group and settings" aria-pressed={showGroup} className="flex items-center rounded-full">
+          <span className="flex -space-x-2">
+            {members.filter((m) => m.id !== me).slice(0, 3).map((m) => <Avatar key={m.id} member={m} size={30} dim />)}
+            <Avatar member={myself} size={30} ring={showGroup} />
+          </span>
+        </button>
       }
       nav={
         <nav className="shrink-0 border-t border-aisle bg-house" aria-label="Sections">
           <div className="mx-auto grid max-w-2xl grid-cols-4">
-            {TABS.map((t) => (
-              <button key={t.id} type="button" aria-current={tab === t.id && !editing ? 'page' : undefined} onClick={() => { setTab(t.id); setEditing(false); }} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-bold transition ${tab === t.id && !editing ? 'text-gold' : 'text-dim hover:text-cream'}`}>
-                <t.icon size={21} />
-                {t.label}
-              </button>
-            ))}
+            {TABS.map((t) => {
+              const on = tab === t.id && !showGroup;
+              return (
+                <button key={t.id} type="button" aria-current={on ? 'page' : undefined} onClick={() => go(t.id)} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-bold transition ${on ? 'text-gold' : 'text-dim hover:text-cream'}`}>
+                  <t.icon size={21} />
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
         </nav>
       }
@@ -123,35 +119,97 @@ export default function App() {
           <span>A new version is ready.</span><span className="underline">Update now</span>
         </button>
       )}
-      {editing ? (
-        <Profiles profiles={profiles} onSave={(p) => store.saveProfiles(p)} onClose={() => setEditing(false)} />
+
+      {showGroup ? (
+        <Group
+          group={group} members={members} me={me} signedIn={Boolean(user) && !local}
+          includeR={includeR} onIncludeR={(v) => { setIncludeR(v); pref.set('include-r', v); }}
+          onLeave={() => leaveGroup(user, group.id)} onSignOut={signOutUser}
+          onSignIn={() => { setLocal(false); setShowGroup(false); }}
+          onClearLocal={() => store.clearAll?.()}
+        />
       ) : (
         <>
-          {tab === 'queue' && <Queue entries={entries} profiles={profiles} onOpen={setOpen} onRate={() => setTab('rate')} />}
-          {tab === 'rate' && <Rate key={active.id} entries={entries} active={active} onRate={rate} />}
-          {tab === 'search' && <Browse entries={entries} profiles={profiles} onOpen={setOpen} />}
-          {tab === 'mine' && <MyTickets entries={entries} active={active} onOpen={setOpen} onRate={() => setTab('rate')} />}
-
-          <footer className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-aisle pt-4 text-xs text-dim">
-            <span>Rating as <span className="font-bold text-cream">{active.name}</span></span>
-            <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 underline"><Settings2 size={12} /> Edit profiles</button>
-            {demo && <span>Demo: sample ratings, saved on this device only.</span>}
-            {demo && <button type="button" onClick={() => store.reset()} className="underline">Reset demo</button>}
-            {demo && hasFirebase && <button type="button" onClick={() => setDemo(false)} className="underline">Exit demo</button>}
-            {user && !demo && <button type="button" onClick={signOutUser} className="inline-flex items-center gap-1 underline"><LogOut size={12} /> Sign out</button>}
-            <span className="tabular-nums">Version {buildLabel}</span>
-          </footer>
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'rate' && <Rate entries={entries} me={me} includeR={includeR} onRate={rate} />}
+          {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
+          {tab === 'mine' && <Mine entries={entries} me={me} onOpen={setOpen} onRate={() => go('rate')} />}
         </>
       )}
 
       {open && (
-        <RateSheet key={`${open.id}-${active.id}`} movie={open} entry={entries[open.id]} profiles={profiles} active={active} onSave={rate} onClose={() => setOpen(null)} />
+        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} onToggleListed={toggleListed} onSave={rate} onClose={() => setOpen(null)} />
       )}
     </Shell>
   );
 }
 
-/** Slim header with the wordmark and profile switcher, a scrolling column, optional bottom nav. */
+function explain(e) {
+  if (e?.code === 'group-missing') return 'This group no longer exists. Sign out and back in to start or join another.';
+  if (e?.code === 'permission-denied') return 'The database refused access. Publish the rules from firestore.rules in the Firebase console (README, step 4).';
+  return e?.message || 'Something went wrong talking to the database.';
+}
+
+function SignIn({ onLocal }) {
+  const [error, setError] = useState('');
+  const signIn = async () => {
+    setError('');
+    try { await signInWithGoogle(); } catch (e) {
+      if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return;
+      setError(e.code === 'auth/unauthorized-domain' ? 'This site is not authorized for sign-in yet. Add its domain under Firebase Authentication → Settings → Authorized domains.' : e.message);
+    }
+  };
+  return (
+    <div className="mx-auto flex max-w-sm flex-col items-center gap-5 py-12 text-center">
+      <p className="text-cream/90">Everyone rates what they've watched. The app learns what each of you likes and suggests what to watch together.</p>
+      {inviteCode && <p className="text-sm text-gold">You've been invited to a group. Sign in to join it.</p>}
+      <button type="button" onClick={signIn} className="flex w-full items-center justify-center gap-3 rounded-lg bg-cream px-4 py-3 font-bold text-house hover:brightness-95">
+        <GoogleG /> Sign in with Google
+      </button>
+      {error && <Notice>{error}</Notice>}
+      <button type="button" onClick={onLocal} className="text-sm text-dim underline hover:text-cream">Use it on this device without signing in</button>
+    </div>
+  );
+}
+
+/** First sign-in: start a group, or join one with an invite code. */
+function Onboard({ user }) {
+  const first = (user.displayName || '').split(' ')[0];
+  const [name, setName] = useState(first ? `${first}'s movie night` : 'Movie night');
+  const [code, setCode] = useState(inviteCode);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const run = async (fn) => {
+    setBusy(true);
+    setError('');
+    try { await fn(); try { sessionStorage.removeItem('fmn-join'); } catch { /* fine */ } } catch (e) { setError(explain(e)); setBusy(false); }
+  };
+
+  return (
+    <div className="mx-auto flex max-w-sm flex-col gap-6 py-8">
+      <h2 className="text-2xl font-bold text-cream">Welcome{first ? `, ${first}` : ''}</h2>
+      {error && <Notice>{error}</Notice>}
+
+      <form className="flex flex-col gap-3 rounded-xl bg-seat p-4" onSubmit={(e) => { e.preventDefault(); run(() => joinGroup(user, code)); }}>
+        <label htmlFor="join-code" className="font-bold text-cream">Join a group</label>
+        <p className="text-sm text-dim">Got an invite code from someone? Enter it here.</p>
+        <input id="join-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} autoCapitalize="characters" autoComplete="off" placeholder="ABC123" className="rounded-lg border border-aisle bg-house px-3 py-2.5 font-display text-xl tracking-[0.2em] text-gold placeholder:text-aisle focus:border-gold focus:outline-none" />
+        <button type="submit" disabled={busy || !code.trim()} className="rounded-lg bg-velvet px-4 py-2.5 font-bold text-cream disabled:bg-aisle disabled:text-dim">Join</button>
+      </form>
+
+      <form className="flex flex-col gap-3 rounded-xl bg-seat p-4" onSubmit={(e) => { e.preventDefault(); run(() => createGroup(user, name)); }}>
+        <label htmlFor="group-name" className="font-bold text-cream">Start a new group</label>
+        <p className="text-sm text-dim">You'll get a code to share with the people you watch with.</p>
+        <input id="group-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} className="rounded-lg border border-aisle bg-house px-3 py-2.5 font-bold text-cream focus:border-gold focus:outline-none" />
+        <button type="submit" disabled={busy} className="rounded-lg border border-aisle px-4 py-2.5 font-bold text-cream disabled:text-dim">Start group</button>
+      </form>
+
+      <button type="button" onClick={signOutUser} className="self-start text-sm text-dim underline">Sign out</button>
+    </div>
+  );
+}
+
+/** Slim header with the wordmark, a scrolling column, optional bottom nav. */
 function Shell({ children, right, nav }) {
   return (
     <div className="flex h-full flex-col">
@@ -174,8 +232,8 @@ const Centered = ({ children }) => <p className="mx-auto max-w-prose py-16 text-
 const GoogleG = () => (
   <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
     <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z" />
-    <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.500-4.800 7.200l7.700 6c4.500-4.200 6.900-10.300 6.900-17.700z" />
-    <path fill="#FBBC05" d="M10.500 28.600c-.500-1.400-.800-3-.800-4.600s.300-3.200.800-4.600l-7.900-6.200C.900 16.500 0 20.100 0 24s.900 7.500 2.600 10.800l7.900-6.200z" />
-    <path fill="#34A853" d="M24 48c6.500 0 11.900-2.100 15.900-5.800l-7.700-6c-2.200 1.500-5 2.300-8.200 2.300-6.300 0-11.600-4.100-13.500-9.900l-7.900 6.200C6.500 42.600 14.600 48 24 48z" />
+    <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z" />
+    <path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.9-6.2z" />
+    <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z" />
   </svg>
 );

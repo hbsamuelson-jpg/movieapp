@@ -1,48 +1,44 @@
 // Two interchangeable stores with the same interface:
-//   subscribe(cb)                    -> unsubscribe;  cb({ entries, profiles })
-//   setRating(movie, profileId, rating | null)
-//   updateMovie(movie)               -> refresh stored movie details
-//   saveProfiles(profiles)
-// The local store powers Demo Mode; the Firestore store syncs across devices.
+//   subscribe(cb, onError)   -> unsubscribe;  cb({ members, entries, shortlist, group })
+//   setRating(movie, rating | null)        the signed-in person's own rating
+//   updateMovie(movie)                     refresh stored movie details
+//   setShortlist(movies)                   tonight's shortlist, shared by the group
+// The local store keeps everything on one device for one person.
+// The group store keeps it in Firestore, shared live between everyone in the group.
 
-import { collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
-import { DEFAULT_PROFILES } from './config.js';
-import { demoEntries } from './demoData.js';
+import { collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { LOCAL_MEMBER } from './config.js';
 import { db } from './firebase.js';
 
-const LOCAL_KEY = 'fmn-demo-v2';
+const LOCAL_KEY = 'fmn-local-v3';
 
 export function createLocalStore() {
-  const seed = () => ({ profiles: DEFAULT_PROFILES, entries: demoEntries() });
-  let state;
+  let state = { entries: {}, shortlist: [] };
   try {
     const saved = JSON.parse(localStorage.getItem(LOCAL_KEY));
-    state = saved?.entries && saved?.profiles ? saved : seed();
-  } catch {
-    state = seed();
-  }
+    if (saved?.entries) state = { entries: saved.entries, shortlist: saved.shortlist || [] };
+  } catch { /* start empty */ }
   const listeners = new Set();
+  const view = () => ({ ...state, members: [LOCAL_MEMBER], group: null });
   const commit = (next) => {
     state = next;
     try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); } catch { /* storage unavailable: keep in memory */ }
-    listeners.forEach((cb) => cb(state));
+    listeners.forEach((cb) => cb(view()));
   };
 
   return {
     kind: 'local',
+    me: LOCAL_MEMBER.id,
     subscribe(cb) {
       listeners.add(cb);
-      cb(state);
+      cb(view());
       return () => listeners.delete(cb);
     },
-    setRating(movie, profileId, rating) {
+    setRating(movie, rating) {
       const id = String(movie.id);
-      const prev = state.entries[id] || { movie, ratings: {} };
-      const ratings = { ...prev.ratings };
-      if (rating) ratings[profileId] = rating;
-      else delete ratings[profileId];
+      const prev = state.entries[id];
       const entries = { ...state.entries };
-      if (Object.keys(ratings).length) entries[id] = { movie: prev.movie.detailed ? prev.movie : movie, ratings };
+      if (rating) entries[id] = { movie: prev?.movie?.detailed ? prev.movie : movie, ratings: { [LOCAL_MEMBER.id]: rating } };
       else delete entries[id];
       commit({ ...state, entries });
     },
@@ -51,33 +47,33 @@ export function createLocalStore() {
       if (!state.entries[id]) return;
       commit({ ...state, entries: { ...state.entries, [id]: { ...state.entries[id], movie } } });
     },
-    saveProfiles(profiles) {
-      commit({ ...state, profiles });
+    setShortlist(shortlist) {
+      commit({ ...state, shortlist });
     },
-    reset() {
-      commit(seed());
+    clearAll() {
+      commit({ entries: {}, shortlist: [] });
     },
   };
 }
 
-export function createFirestoreStore(uid) {
-  const household = doc(db, 'households', uid);
-  const movies = collection(household, 'movies');
+export function createGroupStore(groupId, uid) {
+  const group = doc(db, 'groups', groupId);
+  const movies = collection(group, 'movies');
 
   return {
-    kind: 'firestore',
+    kind: 'group',
+    me: uid,
     subscribe(cb, onError) {
-      let profiles = null;
+      let head = null;
       let entries = null;
-      const emit = () => profiles && entries && cb({ profiles, entries });
-      const stopHousehold = onSnapshot(household, (snap) => {
-        if (!snap.exists()) {
-          // First sign-in: create the household with the three default profiles.
-          setDoc(household, { profiles: DEFAULT_PROFILES, createdAt: serverTimestamp() });
-          profiles = DEFAULT_PROFILES;
-        } else {
-          profiles = snap.data().profiles || DEFAULT_PROFILES;
-        }
+      const emit = () => head && entries && cb({ ...head, entries });
+      const stopGroup = onSnapshot(group, (snap) => {
+        const data = snap.data();
+        if (!data) { onError?.({ code: 'group-missing' }); return; }
+        const members = Object.entries(data.members || {})
+          .map(([id, m]) => ({ id, name: m.name || 'Someone', photo: m.photo || null }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        head = { members, shortlist: data.shortlist || [], group: { id: groupId, name: data.name || 'Movie night' } };
         emit();
       }, onError);
       const stopMovies = onSnapshot(movies, (snap) => {
@@ -88,20 +84,20 @@ export function createFirestoreStore(uid) {
         });
         emit();
       }, onError);
-      return () => { stopHousehold(); stopMovies(); };
+      return () => { stopGroup(); stopMovies(); };
     },
-    setRating(movie, profileId, rating) {
+    setRating(movie, rating) {
       return setDoc(
         doc(movies, String(movie.id)),
-        { movie, ratings: { [profileId]: rating || deleteField() }, updatedAt: serverTimestamp() },
+        { movie, ratings: { [uid]: rating || deleteField() }, updatedAt: serverTimestamp() },
         { merge: true },
       );
     },
     updateMovie(movie) {
       return setDoc(doc(movies, String(movie.id)), { movie }, { merge: true });
     },
-    saveProfiles(profiles) {
-      return setDoc(household, { profiles }, { merge: true });
+    setShortlist(shortlist) {
+      return updateDoc(group, { shortlist });
     },
   };
 }

@@ -41,28 +41,42 @@ function normalize(raw) {
   };
 }
 
-// Family-safe defaults for every deck: US certification PG-13 or below.
-const SAFE = { include_adult: 'false', certification_country: 'US', 'certification.lte': 'PG-13', language: 'en-US' };
+/** Categories you can narrow the rating deck to. */
+export const GENRE_CHOICES = [
+  [28, 'Action'], [12, 'Adventure'], [16, 'Animation'], [35, 'Comedy'], [18, 'Drama'], [10751, 'Family'],
+  [14, 'Fantasy'], [878, 'Sci-Fi'], [9648, 'Mystery'], [10749, 'Romance'], [53, 'Thriller'], [27, 'Horror'],
+  [10402, 'Music'], [99, 'Documentary'],
+].map(([id, name]) => ({ id, name }));
 
-// Decks to rate through and browse. `demo` filters the built-in catalog when there is no TMDB key.
-export const DECKS = [
-  { id: 'best', label: 'All-time best', params: { sort_by: 'vote_average.desc', 'vote_count.gte': '3000' }, demo: () => true },
-  { id: 'family', label: 'Family', params: { with_genres: '10751', sort_by: 'vote_average.desc', 'vote_count.gte': '1000' }, demo: (m) => m.genres.includes('Family') },
-  { id: 'animation', label: 'Animation', params: { with_genres: '16', sort_by: 'vote_average.desc', 'vote_count.gte': '1000' }, demo: (m) => m.genres.includes('Animation') },
-  { id: 'adventure', label: 'Adventure', params: { with_genres: '12', sort_by: 'vote_average.desc', 'vote_count.gte': '2000' }, demo: (m) => m.genres.includes('Adventure') },
-  { id: 'classics', label: 'Before 2000', params: { sort_by: 'vote_average.desc', 'vote_count.gte': '1500', 'primary_release_date.lte': '1999-12-31' }, demo: (m) => m.year < 2000 },
-  { id: 'recent', label: 'Popular now', params: { with_genres: '10751', sort_by: 'popularity.desc' }, demo: (m) => m.year >= 2018 },
-];
+export const THIS_YEAR = new Date().getFullYear();
+export const FIRST_YEAR = 1970;
 
-/** One page of a deck, best first. Returns { movies, hasMore }. With TMDB this pages on for hundreds of movies. */
-export async function browse(deckId, page = 1) {
-  const deck = DECKS.find((d) => d.id === deckId) || DECKS[0];
+/**
+ * The top movies of one year: the `perYear` most-watched releases, optionally narrowed to
+ * categories. `genres` is a list of names from GENRE_CHOICES; a movie in any of them counts.
+ * R-rated titles are left out unless `includeR` is set.
+ */
+export async function topOfYear({ year, perYear = 10, genres = [], includeR = false }) {
   if (!hasTmdb) {
-    const movies = DEMO_CATALOG.filter(deck.demo).sort((a, b) => b.vote - a.vote);
-    return { movies, hasMore: false };
+    return DEMO_CATALOG
+      .filter((m) => m.year === year && (!genres.length || genres.some((g) => m.genres.includes(g))))
+      .sort((a, b) => b.vote - a.vote)
+      .slice(0, perYear);
   }
-  const data = await get('/discover/movie', { ...SAFE, ...deck.params, page });
-  return { movies: data.results.map(normalize), hasMore: page < Math.min(data.total_pages, 500) };
+  const ids = GENRE_CHOICES.filter((g) => genres.includes(g.name)).map((g) => g.id);
+  const params = {
+    include_adult: 'false',
+    language: 'en-US',
+    region: 'US',
+    certification_country: 'US',
+    'certification.lte': includeR ? 'R' : 'PG-13',
+    primary_release_year: String(year),
+    sort_by: 'vote_count.desc',
+    'vote_count.gte': '150',
+  };
+  if (ids.length) params.with_genres = ids.join('|');
+  const data = await get('/discover/movie', params); // one page = 20 movies
+  return data.results.slice(0, perYear).map(normalize);
 }
 
 export async function searchMovies(query) {

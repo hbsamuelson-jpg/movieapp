@@ -1,20 +1,26 @@
 # Family Movie Night
 
-A web app where one household rates movies on three profiles and gets a shared **queue** of what everyone will happily watch.
+A web app for a group of people who watch movies together. Everyone signs in with their own Google account, rates what they've watched, and the app learns each person's taste and suggests what to watch for whoever is there tonight.
 
 - **React 18 + Vite + Tailwind CSS 4 + Lucide icons**
-- **Firebase Auth** (Google Sign-In) and **Cloud Firestore** (ratings sync across devices)
-- **TMDB** for search, posters, MPAA ratings, runtimes and synopses
-- **Demo Mode** with 150 built-in movies and sample ratings on 16 of them — no keys needed
+- **Firebase Auth** (Google Sign-In) and **Cloud Firestore** (ratings shared live across the group)
+- **TMDB** for posters, search, MPAA ratings, runtimes and synopses
+- Updates itself on every device when you deploy a new build
 
-## Run it right now (Demo Mode)
+## What works with and without keys
+
+| | No keys | TMDB key only | TMDB + Firebase |
+| --- | --- | --- | --- |
+| Movies | 150 built in, title cards instead of posters | Every movie, real posters | Every movie, real posters |
+| People | One person, on one device | One person, on one device | Everyone signs in with Google and shares a group |
+| Ratings | Saved in that browser | Saved in that browser | Synced live to everyone |
+
+The app ships with no ratings. Everything starts empty.
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:5173
 ```
-
-Open http://localhost:5173. With no keys in `.env.local` the app starts in Demo Mode: sample ratings for all three profiles, saved in that browser only. Posters are drawn as title cards because there is no TMDB key yet. The built-in list's scores and runtimes are approximate; real data comes from TMDB once you add a key.
 
 ## Go live: keys and setup
 
@@ -30,7 +36,7 @@ cp .env.example .env.local
 2. Go to **Settings → API** (https://www.themoviedb.org/settings/api) and request an API key. Choose "Developer", personal use.
 3. Copy the **API Key** (the short one) into `VITE_TMDB_API_KEY`. The long "API Read Access Token" also works.
 
-With only this key set, the app still runs in Demo Mode but browses and searches the real TMDB catalog with real posters.
+With only this key set you get real posters and every movie, but still one person on one device.
 
 ### 2. Firebase project
 
@@ -56,7 +62,7 @@ With only this key set, the app still runs in Demo Mode but browses and searches
 1. **Build → Firestore Database → Create database**. Choose **Production mode** and any region near you.
 2. Open the **Rules** tab, paste the contents of [`firestore.rules`](./firestore.rules), and click **Publish**.
 
-Those rules let each signed-in Google account read and write only its own household.
+Those rules let signed-in people read and write only the group they belong to. A group can be opened only by someone who knows its invite code.
 
 ### 5. Start it
 
@@ -64,7 +70,7 @@ Those rules let each signed-in Google account read and write only its own househ
 npm run dev
 ```
 
-Restart the dev server after editing `.env.local`. You should see the Google sign-in screen. Sign in, pick a profile, and rate away. Sign in with the same Google account on any other device to see the same ratings.
+Restart the dev server after editing `.env.local`. You should see the Google sign-in screen. Sign in, start a group, and send the invite link to the people you watch with. Each of them signs in with their own Google account.
 
 Your finished `.env.local` looks like this:
 
@@ -109,52 +115,60 @@ Run `npm run deploy` again whenever you change something. `firebase.json` is alr
 
 ## How it works
 
+### People and groups
+
+There are no parent or kid roles. Everyone is an equal member of a **group**. The first person signs in and starts a group, which gets a six-character invite code. Everyone else opens the invite link (or signs in and types the code) and joins. Tap the avatars in the top right for the member list, the invite link, and sign out.
+
 ### Tabs
 
-- **Queue** — one ranked list of what all three of you can watch together, with lane chips and filters.
-- **Rate** — go through a "best of" list one movie at a time. It skips anything the current profile already rated and keeps loading more (with a TMDB key, hundreds per list).
+- **Tonight** — pick who's watching, see suggestions ranked for exactly those people, put movies on the shared shortlist with **+**, then choose together or **Spin**.
+- **Rate** — one poster at a time: the top movies of a year, then the year before, and so on back to 1970. Open the bar at the top to change how many per year (5, 10 or 20), narrow to categories you've watched a lot of, or jump to a decade. It skips what you've already rated and remembers where you stopped.
 - **Search** — find one specific movie.
-- **Mine** — everything the current profile has rated.
-
-### Profiles
-
-One Google account is one household with three fixed profiles: `parent`, `kid1`, `kid2`. The kids never need accounts. Switch by tapping an avatar in the header; rename them under **Edit profiles** at the bottom of any page. The queue rules treat the first profile as the parent.
+- **Mine** — your ratings, plus a summary of your taste by category.
 
 ### Ratings
 
-| | Status | Stored as | Stars |
+| | Choice | Stored as | Stars |
 | --- | --- | --- | --- |
 | Watched it | **Watched** | `seen` | Required, 0.5–5 in half steps |
 | Watched it | **Watch again** | `again` | Required, 0.5–5 |
 | Haven't watched it | **Want to** | `unseen` | None |
-| Haven't watched it | **Indifferent** | `meh` | None |
+| Haven't watched it | **Don't care** | `meh` | None |
 | Haven't watched it | **No thanks** | `pass` | None |
 
-### Queue rules (`src/lib/together.js`)
+### Taste and suggestions (`src/lib/suggest.js`)
 
-Each movie lands in at most one lane, checked in this order:
+**Taste.** For each person the app averages their stars per category, pulled toward their overall average until a category has a few ratings. For a movie they haven't rated it predicts their stars from those category scores, blended with the TMDB audience score. The more they rate, the more weight their own taste gets (up to 70% after 30 ratings).
 
-1. **Ruled out.** Anyone said No thanks, or rated it 2 stars or lower without marking Watch again. Hidden from the queue, listed under "ruled out" at the bottom.
-2. **New to us.** All three have weighed in, the kids haven't watched it, the parent either hasn't or would watch again, and at least one person actively wants it. Indifferent is allowed. Sorted by match %: the TMDB audience score, blended 50/50 with the parent's stars on a parent rewatch, minus 10 points per Indifferent.
-3. **Family favorite.** All three rated it 4+ stars and at least one would watch again. Sorted by family average.
-4. **Needs a vote.** Exactly two want to watch or rewatch it and the third has not rated it at all.
+**Suggestions for who's here.** A movie is suggested when:
 
-Filters (genre, G / PG / PG-13, runtime) apply to the whole queue.
+1. nobody present ruled it out (a No thanks, or 1–2 stars without Watch again), and
+2. at least one person present marked it Want to or Watch again.
 
-`npm test` runs these rules against the demo data.
+Each present person then contributes a score out of 100: Want to 92, Watch again 20 per star, Don't care 55, watched without wanting a rewatch 10 per star, and for anyone who hasn't rated it, their predicted stars (discounted 15% for being a guess). The match % is 70% the group average plus 30% the least-keen person's score, so a pick everyone is fine with beats one that one person loves and another shrugs at.
+
+People who aren't watching tonight don't count, including their vetoes.
+
+`npm test` checks these rules.
+
+**"Top of each year"** means the most-rated releases of that year on TMDB, PG-13 and under unless you turn on R-rated movies in the group page.
 
 ## Database schema (Firestore)
 
 ```
-households/{uid}                      ← uid = the signed-in Google account
-  profiles: [
-    { id: "parent", name: "Parent", avatar: "director" },
-    { id: "kid1",   name: "Kid 1",  avatar: "popcorn"  },
-    { id: "kid2",   name: "Kid 2",  avatar: "clapper"  }
-  ]
+users/{uid}                           ← one per Google account
+  groupId: "K7M2QX"                   // the group this person is in
+
+groups/{code}                         ← the document id is the invite code
+  name: "Couper's movie night"
+  members: {
+    "<uid>": { name: "Couper", photo: "https://…" },
+    "<uid>": { name: "Henry",  photo: null }
+  }
+  shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
   createdAt: timestamp
 
-households/{uid}/movies/{tmdbId}      ← one document per rated movie
+groups/{code}/movies/{tmdbId}         ← one document per movie anyone has rated
   movie: {
     id: 105,                          // TMDB id
     title: "Back to the Future",
@@ -168,49 +182,49 @@ households/{uid}/movies/{tmdbId}      ← one document per rated movie
     detailed: true                    // runtime + cert have been fetched
   }
   ratings: {
-    parent: { status: "again",  stars: 5    },
-    kid1:   { status: "unseen", stars: null },
-    kid2:   { status: "seen",   stars: 3.5  }   // a missing key = hasn't rated it
+    "<uid>": { status: "again",  stars: 5    },
+    "<uid>": { status: "unseen", stars: null }   // a missing uid = hasn't rated it
     // status is one of: seen | again | unseen | meh | pass
   }
   updatedAt: timestamp
 ```
 
-Keeping all three ratings on one movie document means the whole queue comes from a single realtime listener, and a copy of the movie details is stored so the lists never need to call TMDB.
+Keeping everyone's ratings on one movie document means suggestions come from a single realtime listener, and a copy of the movie details is stored so the lists never need to call TMDB.
 
 ## Project layout
 
 ```
 src/
-  App.jsx                   sign-in gate, header profile switcher, tabs
-  index.css                 theme tokens, status stubs, animations
+  App.jsx                   sign-in, group onboarding, tabs
+  index.css                 theme tokens and animations
   lib/
-    config.js               reads .env, decides Demo vs live
-    firebase.js             Auth + Firestore setup
-    store.js                local (demo) store and Firestore store, same interface
+    config.js               reads .env, small on-device preferences
+    firebase.js             Google sign-in; create, join and leave a group
+    store.js                on-device store and shared group store, same interface
+    tmdb.js                 top-of-year decks, search, details; falls back to the built-in list
+    suggest.js              taste profiles and suggestions (pure functions)
     autoUpdate.js           checks for a newer build and reloads into it
-    tmdb.js                 search, rating decks, details; falls back to the built-in list
-    together.js             the queue rules (pure functions)
-    demoData.js             built-in movie list and sample ratings
+    demoData.js             the built-in movie list (no ratings)
   components/
-    Queue.jsx               the shared queue, lanes and filters
-    Rate.jsx                rate-through, one movie at a time
+    Tonight.jsx             who's watching, shortlist, Spin, suggestions
+    Rate.jsx                poster-by-poster rating, year by year
     Browse.jsx              search
-    MyTickets.jsx           one profile's ratings
+    Mine.jsx                your ratings and taste summary
     RateSheet.jsx           movie details and rating sheet
-    Profiles.jsx            profile editor
-    ui.jsx                  posters, stars, status stubs, avatars, queue rows
+    Group.jsx               members, invite link, settings
+    ui.jsx                  posters, stars, status stubs, avatars, rows
 firestore.rules             security rules to paste into Firebase
 vercel.json / firebase.json hosting config for either deploy route
 public/                     home-screen icons and web app manifest
 .env.example                key template
-tests/together.test.mjs     rule checks
+tests/suggest.test.mjs      rule checks
 ```
 
 ## Troubleshooting
 
-- **Still in Demo Mode after adding keys:** all four `VITE_FIREBASE_*` values must be set, `VITE_DEMO_MODE` must not be `true`, and the dev server must be restarted.
-- **"Firestore refused access":** the rules from step 4 have not been published.
+- **No sign-in screen after adding keys:** all four `VITE_FIREBASE_*` values must be set and `VITE_DEMO_MODE` must not be `true`. Locally, restart the dev server. On Vercel, add them under Settings → Environment Variables and redeploy; keys only take effect on a new build.
+- **No posters:** `VITE_TMDB_API_KEY` is missing from the build. Same fix as above.
+- **"The database refused access":** the rules from step 4 have not been published.
 - **"This domain is not authorized":** add the domain in step 3.3.
 - **An update isn't showing up:** check the build time at the bottom of the page. If it is old, close and reopen the app once; if your host isn't Vercel or Firebase, make sure it doesn't cache `index.html` or `version.json`.
 - **Sign-in popup closes on a phone:** some in-app browsers block popups. Open the site in Safari or Chrome.

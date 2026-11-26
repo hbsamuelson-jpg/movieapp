@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, SlidersHorizontal, Sparkles, Undo2, X } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, Sparkles, Trophy, Undo2, X } from 'lucide-react';
 import { askForDeck } from '../lib/assistant.js';
 import { hasTmdb, pref } from '../lib/config.js';
-import { enrich, ERAS, GENRE_CHOICES, topOfYear, trailerUrl, yearsFor } from '../lib/tmdb.js';
+import { allTimeBest, enrich, ERAS, GENRE_CHOICES, topOfYear, trailerUrl, yearsFor } from '../lib/tmdb.js';
 import Rank from './Rank.jsx';
 import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink, KeyHint, MovieLinks, useStarKeys } from './ui.jsx';
 
@@ -51,6 +51,23 @@ function QuickSwipe({ entries, me, onRate }) {
   const [ask, setAsk] = useState('');
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState('');
+  // "Best of all time": the top-rated movies overall or in one category, as a list to work through.
+  const [showBest, setShowBest] = useState(false);
+  const [loadingBest, setLoadingBest] = useState(null);
+  const openBest = async (genre) => {
+    if (loadingBest !== null) return;
+    setLoadingBest(genre || 'all');
+    setAskError('');
+    try {
+      const list = (await allTimeBest(genre)).filter((m) => { const r = entries[m.id]?.ratings?.[me]; return !r || r.status === 'notseen'; });
+      if (!list.length) setAskError(`You've already rated all of the best ${genre ? `${genre} ` : ''}movies on this list.`);
+      else { setDeck({ request: genre ? `Best ${genre} movies of all time` : 'Best movies of all time', movies: list, best: true }); setStars(0); setShowBest(false); }
+    } catch (err) {
+      setAskError(err.message);
+    } finally {
+      setLoadingBest(null);
+    }
+  };
   const askDeck = async (e) => {
     e.preventDefault();
     const wanted = ask.trim();
@@ -158,13 +175,26 @@ function QuickSwipe({ entries, me, onRate }) {
         </div>
         <button type="submit" disabled={!ask.trim() || asking} className="shrink-0 rounded-full bg-velvet px-4 py-2 text-sm font-bold text-cream disabled:bg-aisle disabled:text-dim">{asking ? 'Finding…' : 'Get list'}</button>
       </form>
+      <div className="flex flex-col gap-2">
+        <button type="button" onClick={() => setShowBest((v) => !v)} aria-expanded={showBest} className="inline-flex items-center gap-1.5 self-start text-sm font-bold text-gold">
+          <Trophy size={15} /> Rate the best of all time <ChevronDown size={14} className={`transition-transform ${showBest ? 'rotate-180' : ''}`} />
+        </button>
+        {showBest && (
+          <div className="flex flex-wrap gap-1.5 rounded-xl bg-seat p-3" role="group" aria-label="Best of all time, by category">
+            <Chip on={false} onClick={() => openBest(null)}>{loadingBest === 'all' ? 'Loading…' : 'All movies'}</Chip>
+            {GENRE_CHOICES.map((g) => <Chip key={g.id} on={false} onClick={() => openBest(g.name)}>{loadingBest === g.name ? 'Loading…' : g.name}</Chip>)}
+          </div>
+        )}
+      </div>
       {askError && <Notice>{askError}</Notice>}
       {deck && (
         <div className="flex items-start gap-3 rounded-xl border border-gold/50 bg-seat p-3">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-cream">“{deck.request}” <span className="font-normal text-dim">· {todo.length} of {deck.movies.length} left</span></p>
+            <p className="text-sm font-bold text-cream">{deck.best ? deck.request : `“${deck.request}”`} <span className="font-normal text-dim">· {todo.length} of {deck.movies.length} left</span></p>
             {deck.note && <p className="mt-0.5 text-xs text-dim">{deck.note}</p>}
-            <p className="mt-0.5 text-xs text-dim">The list comes from the AI's own knowledge, not a live lookup, so a “top 10” may differ from the site's current one.</p>
+            {deck.best
+              ? <p className="mt-0.5 text-xs text-dim">Highest audience scores on TMDB among widely seen movies, best first. Ones you've rated are left out.</p>
+              : <p className="mt-0.5 text-xs text-dim">The list comes from the AI's own knowledge, not a live lookup, so a “top 10” may differ from the site's current one.</p>}
           </div>
           <button type="button" onClick={() => { setDeck(null); setStars(0); }} aria-label="Close this list and go back to all movies" className="shrink-0 rounded-full p-1.5 text-dim hover:text-cream"><X size={16} /></button>
         </div>

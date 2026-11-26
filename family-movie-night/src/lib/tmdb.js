@@ -89,6 +89,32 @@ export async function topOfYear({ year, perYear = 10, genres = [] }) {
 }
 
 /**
+ * The best-regarded movies of all time, overall or in one genre: the highest TMDB audience
+ * scores among movies with a lot of votes (so obscure titles with a handful of perfect scores
+ * don't crowd out the classics). Best first, up to 60.
+ */
+export async function allTimeBest(genre = null) {
+  if (!hasTmdb) {
+    return DEMO_CATALOG.filter((m) => !genre || (m.genres || []).includes(genre)).sort((a, b) => b.vote - a.vote).slice(0, 60);
+  }
+  const base = { include_adult: 'false', language: 'en-US', sort_by: 'vote_average.desc' };
+  if (genre) base.with_genres = genreIds([genre]).join('|');
+  // "Widely seen" means 8,000+ votes overall and 2,500+ within a category. Small categories
+  // (documentaries) don't have enough movies that popular, so the bar drops until there are 20.
+  let pages = [];
+  for (const votes of genre ? ['2500', '800', '300'] : ['8000']) {
+    const first = await get('/discover/movie', { ...base, 'vote_count.gte': votes, page: '1' });
+    pages = [first];
+    if (first.total_results >= 20 || votes === '300') {
+      const more = Math.min(3, first.total_pages || 1);
+      for (let page = 2; page <= more; page += 1) pages.push(await get('/discover/movie', { ...base, 'vote_count.gte': votes, page: String(page) }));
+      break;
+    }
+  }
+  return pages.flatMap((p) => p.results).filter((m) => m.poster_path).map(normalize);
+}
+
+/**
  * Movies opening in US theatres over the next five months, most anticipated first (cached for
  * the session). Each has `release` (YYYY-MM-DD).
  */

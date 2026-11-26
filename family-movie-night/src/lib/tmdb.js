@@ -244,8 +244,30 @@ export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew
 // TMDB relays JustWatch's list of which US services carry each movie. The same service shows up
 // under several names ("Paramount Plus Premium", "Paramount+ Amazon Channel"), so each is folded
 // into one plain name. The app assumes the family has every subscription service.
-const WATCH_TTL = 14 * 24 * 60 * 60 * 1000; // catalogues change; look again after two weeks
-const watchFresh = (movie) => Boolean(movie.watch && movie.watch.v === 2 && Date.now() - movie.watch.at < WATCH_TTL);
+const DAY = 24 * 60 * 60 * 1000;
+// Catalogues change, so availability is looked up again after two to four weeks. The exact wait
+// depends on the movie, so a big library doesn't all come due on the same day.
+const watchTtl = (movie) => (14 + (Number(movie.id) % 14)) * DAY;
+// When this device last looked a movie up. A refresh that finds nothing new is remembered here,
+// on the device, instead of being written to the shared database.
+const lookedUp = pref.get('looked-up', {});
+let saveLookedUp = null;
+function noteLookedUp(id) {
+  lookedUp[id] = Date.now();
+  clearTimeout(saveLookedUp);
+  saveLookedUp = setTimeout(() => pref.set('looked-up', lookedUp), 1500);
+}
+const watchFresh = (movie) => Boolean(movie.watch && movie.watch.v === 2 && Date.now() - Math.max(movie.watch.at, lookedUp[movie.id] || 0) < watchTtl(movie));
+/**
+ * True if `next` says anything the stored `prev` doesn't (ignoring the "checked at" time). The
+ * background refresh only writes to the shared database when this is true.
+ */
+export function detailsChanged(prev, next) {
+  const core = (m) => JSON.stringify({ ...m, watch: m.watch ? { ...m.watch, at: 0 } : null });
+  return core(prev) !== core(next);
+}
+/** True if this device already tried to fill in this movie's details in the last 20 hours. */
+export const triedRecently = (movie) => Date.now() - (lookedUp[movie.id] || 0) < 20 * 60 * 60 * 1000;
 const SERVICE_NAMES = [
   [/^netflix/i, 'Netflix'], [/prime video/i, 'Prime Video'], [/^disney/i, 'Disney+'], [/^(hbo )?max\b/i, 'HBO Max'],
   [/^hulu/i, 'Hulu'], [/^apple tv/i, 'Apple TV+'], [/^paramount/i, 'Paramount+'], [/^peacock/i, 'Peacock'],
@@ -293,6 +315,7 @@ export async function enrich(movie) {
     const us = raw.release_dates?.results?.find((r) => r.iso_3166_1 === 'US');
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
     // A score already saved with the movie is kept, so refreshing where-to-watch costs no lookups.
+    noteLookedUp(movie.id);
     const critics = movie.scored === SCORE_VERSION ? { rt: movie.rt ?? null, mc: movie.mc ?? null, checked: true } : await criticScores(raw.imdb_id);
     return {
       ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []),

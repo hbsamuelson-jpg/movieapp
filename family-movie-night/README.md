@@ -220,6 +220,8 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Rating sheet.** Once you give stars, the three "Haven't watched it" buttons grey out. Tapping one still works: it clears the stars and switches your answer.
 
+**Database limits.** Firebase's free plan allows about 50,000 reads and 20,000 writes a day, and every phone re-reads a movie whenever anyone's phone rewrites it. The only background job that writes is the one that fills in movie details (credits, score, where to watch). It tries each movie at most once every 20 hours per device, refreshes availability every two to four weeks (staggered by movie), and writes only when a lookup found something new; an unchanged refresh is remembered on the device. If the limit is ever hit, the app says so and recovers by itself around midnight Pacific. Switching the Firebase project to the Blaze (pay-as-you-go) plan removes the cap.
+
 **Title links.** On a movie's detail sheet and on the Quick Swipe card, the title opens Rotten Tomatoes in a new tab. It goes to their search results for that title (the movie is the top result), because nothing the app has access to gives a movie's exact Rotten Tomatoes address.
 
 **Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise its Metacritic score, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.

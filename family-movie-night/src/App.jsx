@@ -12,7 +12,7 @@ import { applyUpdate, watchForUpdates } from './lib/autoUpdate.js';
 import { hasFirebase, pref } from './lib/config.js';
 import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js';
 import { createLocalStore, createSharedStore, newId8, slim } from './lib/store.js';
-import { enrich, needsDetails } from './lib/tmdb.js';
+import { detailsChanged, enrich, needsDetails, triedRecently } from './lib/tmdb.js';
 import { unscoredNights } from './lib/stats.js';
 
 const TABS = [
@@ -43,16 +43,25 @@ export default function App() {
   useEffect(() => (hasFirebase ? watchSession(setSession, (e) => setProblem(explain(e))) : undefined), []);
   useEffect(() => (ready ? store.subscribe(setData, (e) => setProblem(explain(e))) : undefined), [ready]);
 
-  // Movies saved before credits and review scores were tracked: fill those in quietly, a few at a time.
+  // Movies with missing or out-of-date details (credits, review score, where to watch): fill those
+  // in quietly, a few at a time. This is the one background job that writes to the shared
+  // database, and every write is re-read by every open phone, so it is careful: each movie is
+  // tried once per session and at most once every 20 hours per device, and it only writes when
+  // the lookup found something new.
   const backfilled = useRef(new Set());
+  const [backfillTick, setBackfillTick] = useState(0);
   useEffect(() => {
-    if (!data) return;
-    const missing = Object.values(data.entries).filter((e) => needsDetails(e.movie) && !backfilled.current.has(String(e.movie.id))).slice(0, 12);
-    missing.forEach((e) => {
-      backfilled.current.add(String(e.movie.id));
-      enrich(e.movie).then((full) => full !== e.movie && full.detailed && store.updateMovie(full));
-    });
-  }, [data]);
+    if (!data) return undefined;
+    const missing = Object.values(data.entries)
+      .filter((e) => needsDetails(e.movie) && !triedRecently(e.movie) && !backfilled.current.has(String(e.movie.id)))
+      .slice(0, 8);
+    if (!missing.length) return undefined;
+    missing.forEach((e) => backfilled.current.add(String(e.movie.id)));
+    let live = true;
+    Promise.all(missing.map((e) => enrich(e.movie).then((full) => full !== e.movie && full.detailed && detailsChanged(e.movie, full) && store.updateMovie(full))))
+      .finally(() => setTimeout(() => live && setBackfillTick((t) => t + 1), 2500)); // then the next few
+    return () => { live = false; };
+  }, [data ? Object.keys(data.entries).length : -1, backfillTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = (id) => { setPicked(id); pref.set('me', id); setShowGroup(false); };
   const googleUid = session && !session.isAnonymous ? session.uid : null;
@@ -210,6 +219,7 @@ export default function App() {
 }
 
 function explain(e) {
+  if (e?.code === 'resource-exhausted') return "The shared database has hit its free daily limit, so names and ratings can't load right now. It resets by itself around midnight Pacific time. To lift the limit, switch the Firebase project to the Blaze (pay-as-you-go) plan in the Firebase console.";
   if (e?.code === 'permission-denied') return 'The database refused access. Publish the rules from firestore.rules in the Firebase console (README, step 4).';
   if (e?.code === 'auth/admin-restricted-operation') return 'Anonymous sign-in is switched off in Firebase. Turn it on under Authentication → Sign-in method → Anonymous (README, step 3).';
   if (e?.code === 'auth/operation-not-allowed') return 'That sign-in method is switched off in Firebase. Turn it on under Authentication → Sign-in method.';

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, EyeOff, GripVertical, ThumbsDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, EyeOff, GripVertical, Sparkles, ThumbsDown, X } from 'lucide-react';
+import { askForDeck } from '../lib/assistant.js';
 import { rankToLiking } from '../lib/suggest.js';
 import { diversePick, enrich } from '../lib/tmdb.js';
 import { Notice, Poster, ScoreBadge } from './ui.jsx';
@@ -28,11 +29,41 @@ export default function Rank({ entries, me, onRate }) {
 
   const exclude = (m) => shown.current.has(String(m.id)) || Boolean(entries[m.id]?.ratings?.[me]);
 
+  // A list asked for in words ("Pixar movies", "90s action"). While one is open, movies are dealt
+  // from it, in the order the AI gave them, instead of from the usual mixed pool.
+  const custom = useRef(null); // the movies still to deal
+  const [list, setList] = useState(null); // { request, note, total }
+  const [ask, setAsk] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState('');
+  const fromList = () => {
+    const movie = custom.current.find((m) => !exclude(m));
+    return movie ? { movie, genre: movie.genres?.[0] || null, decade: movie.year ? Math.floor(movie.year / 10) * 10 : null } : null;
+  };
+  const askList = async (e) => {
+    e.preventDefault();
+    const wanted = ask.trim();
+    if (!wanted || asking) return;
+    setAsking(true);
+    setAskError('');
+    try {
+      const got = await askForDeck({ request: wanted, entries, memberId: me, spares: true });
+      const fresh = got.movies.filter((m) => !exclude(m));
+      if (!fresh.length) setAskError(got.asked ? "You've already rated or ranked everything on that list. Try a different one." : 'Nothing came back for that. Try wording it differently.');
+      else { custom.current = fresh; setList({ request: wanted, note: got.note, total: fresh.length }); setAsk(''); deal(); }
+    } catch (err) {
+      setAskError(err.message);
+    } finally {
+      setAsking(false);
+    }
+  };
+  const closeList = () => { custom.current = null; setList(null); deal(); };
+
   // Fill one slot with a movie unlike the ones already on the table.
   const fill = async (key, batch) => {
     const others = slotsRef.current.filter((s) => s.key !== key && s.movie);
     try {
-      const found = await diversePick({ avoidGenres: others.map((s) => s.genre), avoidDecades: others.map((s) => s.decade), exclude });
+      const found = custom.current ? fromList() : await diversePick({ avoidGenres: others.map((s) => s.genre), avoidDecades: others.map((s) => s.decade), exclude });
       if (batch !== live.current) return;
       if (found) {
         shown.current.add(String(found.movie.id));
@@ -121,13 +152,31 @@ export default function Rank({ entries, me, onRate }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <form onSubmit={askList} className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Sparkles size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gold" />
+          <input id="rank-ask" value={ask} onChange={(e) => setAsk(e.target.value)} maxLength={200} autoComplete="off" placeholder="Ask for anything to rank, e.g. Pixar movies" aria-label="Ask for a list of movies to rank" className="w-full rounded-full border border-aisle bg-house py-2.5 pl-10 pr-4 text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
+        </div>
+        <button type="submit" disabled={!ask.trim() || asking} className="shrink-0 rounded-full bg-velvet px-4 py-2 text-sm font-bold text-cream disabled:bg-aisle disabled:text-dim">{asking ? 'Finding…' : 'Get list'}</button>
+      </form>
+      {askError && <Notice>{askError}</Notice>}
+      {list && (
+        <div className="flex items-start gap-3 rounded-xl border border-gold/50 bg-seat p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-cream">“{list.request}” <span className="font-normal text-dim">· ranking from {list.total} movies</span></p>
+            {list.note && <p className="mt-0.5 text-xs text-dim">{list.note}</p>}
+            <p className="mt-0.5 text-xs text-dim">The list comes from the AI's own knowledge, not a live lookup. Movies you've already rated are left out.</p>
+          </div>
+          <button type="button" onClick={closeList} aria-label="Close this list and go back to the usual mix" className="shrink-0 rounded-full p-1.5 text-dim hover:text-cream"><X size={16} /></button>
+        </div>
+      )}
       <p className="text-sm text-dim">Kick out anything you haven't seen (it won't be dealt to you again). Then put the rest in order, best at the top: drag a row by its poster, or use the arrows. Then submit.</p>
       {error && <Notice>{error}</Notice>}
 
       <ol ref={listRef} className="flex flex-col gap-2">
         {slots.map((slot) => {
           if (slot.loading) return <li key={slot.key} className="flex h-[96px] items-center justify-center rounded-xl bg-seat text-sm text-dim">Finding another…</li>;
-          if (slot.empty) return <li key={slot.key} className="flex h-[96px] items-center justify-center rounded-xl border border-dashed border-aisle text-sm text-dim">Nothing left to offer here</li>;
+          if (slot.empty) return <li key={slot.key} className="flex h-[96px] items-center justify-center rounded-xl border border-dashed border-aisle text-sm text-dim">{list ? 'That list has no more movies' : 'Nothing left to offer here'}</li>;
           const place = ranked.indexOf(slot);
           const { movie } = slot;
           return (

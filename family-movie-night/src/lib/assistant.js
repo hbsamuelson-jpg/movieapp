@@ -78,10 +78,11 @@ export async function resolvePicks(picks, entries, presentIds) {
 
 /**
  * Ask for a list of movies to rate ("5 good R comedies", "top 10 action on Rotten Tomatoes").
+ * `spares` asks for 15 whatever number the request names (Rank 5 swaps out unseen ones).
  * Returns { note, movies }: the AI names titles, each is looked up on TMDB (made-up ones drop
  * out), and anything this person has already rated is left off.
  */
-export async function askForDeck({ request, entries, memberId }) {
+export async function askForDeck({ request, entries, memberId, spares = false }) {
   if (!hasFirebase) throw new Error('Custom lists only work on the live site, where the assistant can check who is asking.');
   const mine = Object.values(entries).filter((e) => e.ratings?.[memberId] && e.ratings[memberId].status !== 'notseen');
   let res;
@@ -89,7 +90,7 @@ export async function askForDeck({ request, entries, memberId }) {
     res = await fetch('/api/assistant', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await idToken()}` },
-      body: JSON.stringify({ kind: 'deck', request, memberId, alreadyRated: mine.slice(0, 400).map((e) => label(e.movie)) }),
+      body: JSON.stringify({ kind: 'deck', request: spares ? `${request}. List 15 that fit, best matches first (the extras are spares).` : request, memberId, alreadyRated: mine.slice(0, 400).map((e) => label(e.movie)) }),
     });
   } catch {
     throw new Error('Could not reach the assistant. Check your connection and try again.');

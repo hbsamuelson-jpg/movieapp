@@ -39,7 +39,16 @@ const rated = (r) => liking(r) != null;
  *           higher, at least twice (an all-time favourite counts double, so one is enough).
  */
 /**
- * Genres people have rated directly on their Mine page: { memberId: { Comedy: 5, Horror: 1.5 } }.
+ * A person's genre ranking (favourite first) as stars: the top genre is 5, the bottom 1, the rest
+ * evenly spaced between. { Comedy: 5, ..., Horror: 1 }
+ */
+export function genreRankToStars(order) {
+  if (!order?.length) return {};
+  return Object.fromEntries(order.map((name, i) => [name, order.length === 1 ? 5 : Math.round((5 - (4 * i) / (order.length - 1)) * 100) / 100]));
+}
+
+/**
+ * Genres people have ranked on their Mine page, as stars: { memberId: { Comedy: 5, Horror: 1 } }.
  * The app sets this whenever the group changes; taste profiles then count each stated genre
  * rating like STATED_WEIGHT movies of that genre rated that way, so it steers suggestions from
  * day one and still gives way as real ratings pile up.

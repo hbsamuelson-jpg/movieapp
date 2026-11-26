@@ -4,7 +4,7 @@
 //   removeMember(id)
 //   linkMember(id, uid | null)   tie a name to a Google account, or untie it
 //   setFavorites(id, movies)     a person's all-time favourites
-//   setGenreStars(id, genre, stars | null)  how much a person likes a whole genre
+//   setGenreRank(id, names | null)   a person's genres in order, favourite first
 //   setRating(movie, memberId, rating | null)
 //   updateMovie(movie)       refresh stored movie details
 //   setShortlist(movies)     tonight's shortlist
@@ -68,13 +68,8 @@ export function createLocalStore() {
     setFavorites(id, favorites) {
       commit({ ...state, members: state.members.map((m) => (m.id === id ? { ...m, favorites } : m)) });
     },
-    setGenreStars(id, genre, stars) {
-      commit({ ...state, members: state.members.map((m) => {
-        if (m.id !== id) return m;
-        const genreStars = { ...(m.genreStars || {}) };
-        if (stars) genreStars[genre] = stars; else delete genreStars[genre];
-        return { ...m, genreStars };
-      }) });
+    setGenreRank(id, genreRank) {
+      commit({ ...state, members: state.members.map((m) => (m.id === id ? { ...m, genreRank: genreRank || null } : m)) });
     },
     setRating(movie, memberId, rating) {
       const id = String(movie.id);
@@ -149,7 +144,7 @@ export function createSharedStore(spaceId = defaultSpace) {
       const emit = () => head && entries && cb({ ...head, entries });
       const stopSpace = onSnapshot(space, (snap) => {
         const data = snap.data() || {}; // no document yet: nobody has added a name
-        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null, favorites: m.favorites || [], snoozed: m.snoozed || {}, genreStars: m.genreStars || {} })).sort(byName);
+        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null, favorites: m.favorites || [], snoozed: m.snoozed || {}, genreRank: m.genreRank || null })).sort(byName);
         history = data.history || [];
         currentVote = data.vote || null;
         head = { members, shortlist: data.shortlist || [], vote: currentVote, history, services: data.services || [] };
@@ -223,9 +218,8 @@ export function createSharedStore(spaceId = defaultSpace) {
       // updateDoc with a dotted path replaces just this person's list (a merge would not shrink it).
       return updateDoc(space, { [`members.${id}.favorites`]: favorites });
     },
-    setGenreStars(id, genre, stars) {
-      // A FieldPath, not a dotted string, because genre names can contain punctuation ("Sci-Fi").
-      return updateDoc(space, new FieldPath('members', id, 'genreStars', genre), stars || deleteField());
+    setGenreRank(id, genreRank) {
+      return updateDoc(space, { [`members.${id}.genreRank`]: genreRank || deleteField() });
     },
     setRating(movie, memberId, rating) {
       // mergeFields replaces this person's rating outright. A plain merge would blend the new

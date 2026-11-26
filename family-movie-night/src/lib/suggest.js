@@ -253,3 +253,47 @@ export function applyFilters(list, filters) {
     return true;
   });
 }
+
+/**
+ * "Movies you should like": one person's own picks, best first. Only movies they have given no
+ * answer for. Two sources: discoveries built from their favourites and liked crew, and movies
+ * someone else in the family rated 4 or higher. Returns [{ movie, match (0–100), because }].
+ */
+export function forYou(entries, memberId, discoveries = [], members = []) {
+  const profile = tasteProfile(entries, memberId);
+  const pool = new Map();
+  for (const d of discoveries) pool.set(String(d.movie.id), { movie: d.movie, sim: d.sim, because: d.because });
+  for (const e of Object.values(entries)) {
+    const fans = members
+      .filter((m) => m.id !== memberId && (liking(e.ratings?.[m.id]) || 0) >= 4)
+      .sort((a, b) => liking(e.ratings[b.id]) - liking(e.ratings[a.id]));
+    if (!fans.length) continue;
+    const key = String(e.movie.id);
+    const prev = pool.get(key);
+    const text = `${fans.slice(0, 2).map((m) => m.name).join(' and ')} loved it`;
+    pool.set(key, prev ? { ...prev, movie: e.movie, sim: Math.min(1, prev.sim + 0.15) } : { movie: e.movie, sim: 0.6, because: text });
+  }
+  const ranked = [...pool.values()]
+    .filter((x) => !entries[x.movie.id]?.ratings?.[memberId])
+    .map((x) => ({
+      movie: x.movie,
+      because: x.because,
+      match: Math.round(Math.max(0, Math.min(100, predictStars(profile, x.movie) * 20 * 0.6 + x.sim * 100 * 0.4 + qualityNudge(x.movie)))),
+    }))
+    .sort((a, b) => b.match - a.match || a.movie.title.localeCompare(b.movie.title));
+  // Mix it up: each repeat of the same reason ("directed by X") costs 8 points of position,
+  // so one director or one favourite can't fill the whole list.
+  const used = new Map();
+  const mixed = [];
+  while (ranked.length) {
+    let best = 0;
+    ranked.forEach((x, n) => {
+      const cost = (y) => y.match - 8 * (used.get(y.because) || 0);
+      if (cost(x) > cost(ranked[best])) best = n;
+    });
+    const [pick] = ranked.splice(best, 1);
+    used.set(pick.because, (used.get(pick.because) || 0) + 1);
+    mixed.push(pick);
+  }
+  return mixed;
+}

@@ -1,6 +1,6 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { voteResult, liking, quality, qualityNudge, shownStars, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { voteResult, liking, quality, qualityNudge, shownStars, forYou, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -162,4 +162,20 @@ assert.equal(shownStars({ status: 'seen', stars: 4, via: 'watched' }), 4);
 assert.equal(shownStars({ status: 'seen', stars: 3.5, via: 'rank', like: 5 }), 3.5);
 assert.equal(liking({ status: 'seen', stars: 3.5, via: 'rank', like: 5 }), 3.5);
 assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
+
+// Movies you should like: only unanswered movies, from discoveries and what the family loved.
+{
+  const A = movie(901, 'Alpha', ['Comedy'], 8), B = movie(902, 'Beta', ['Comedy'], 7), C = movie(903, 'Gamma', ['Drama'], 7), D = movie(904, 'Delta', ['Drama'], 7);
+  const people = [{ id: 'me', name: 'Me' }, { id: 'kid', name: 'Kid' }];
+  const es = {
+    901: { movie: A, ratings: { kid: seen(5) } },
+    902: { movie: B, ratings: { kid: seen(5), me: want } },
+    903: { movie: C, ratings: { kid: seen(2) } },
+  };
+  const picks = forYou(es, 'me', [{ movie: D, sim: 0.9, because: 'like Alpha' }], people);
+  assert.deepEqual(picks.map((p) => p.movie.id).sort(), [901, 904]);
+  assert.equal(picks.find((p) => p.movie.id === 901).because, 'Kid loved it');
+  assert.equal(picks.find((p) => p.movie.id === 904).because, 'like Alpha');
+  assert.ok(picks.every((p) => p.match >= 0 && p.match <= 100));
+}
 console.log('\nAll suggestion checks passed.');

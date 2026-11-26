@@ -19,7 +19,7 @@ const once = (key, load) => {
 };
 
 /** The movies and people each present member's taste points at. */
-export function interestSeeds(entries, members, presentIds) {
+export function interestSeeds(entries, members, presentIds, { perPerson = SEEDS_PER_PERSON, crewPerPerson = 2, maxSeeds = MAX_SEEDS, maxPeople = MAX_PEOPLE } = {}) {
   const seeds = new Map(); // movie id -> movie
   const people = new Map(); // person id -> person
   for (const member of members.filter((m) => presentIds.includes(m.id))) {
@@ -29,18 +29,18 @@ export function interestSeeds(entries, members, presentIds) {
       .map((e) => e.movie);
     // Favourites first, then the highest-rated movies, a few per person so nobody dominates.
     const mine = [...(member.favorites || []), ...loved].filter((m, n, all) => all.findIndex((x) => String(x.id) === String(m.id)) === n);
-    mine.slice(0, SEEDS_PER_PERSON).forEach((m) => seeds.set(String(m.id), m));
-    tasteProfile(entries, member.id).people.slice(0, 2).forEach((p) => people.set(p.id, p));
+    mine.slice(0, perPerson).forEach((m) => seeds.set(String(m.id), m));
+    tasteProfile(entries, member.id).people.slice(0, crewPerPerson).forEach((p) => people.set(p.id, p));
   }
-  return { seeds: [...seeds.values()].slice(0, MAX_SEEDS), people: [...people.values()].slice(0, MAX_PEOPLE) };
+  return { seeds: [...seeds.values()].slice(0, maxSeeds), people: [...people.values()].slice(0, maxPeople) };
 }
 
 /**
  * Returns [{ movie, sim, because }]: `sim` is 0–1 (how well it matches the group's interests)
  * and `because` is a short reason to show, e.g. "like Knives Out" or "directed by Rian Johnson".
  */
-export async function discover(entries, members, presentIds) {
-  const { seeds, people } = interestSeeds(entries, members, presentIds);
+export async function discover(entries, members, presentIds, options) {
+  const { seeds, people } = interestSeeds(entries, members, presentIds, options);
   if (!seeds.length && !people.length) return [];
 
   const [similarLists, crewLists] = await Promise.all([
@@ -72,3 +72,6 @@ export async function discover(entries, members, presentIds) {
   const detailed = await Promise.all(ranked.slice(0, DETAIL_TOP).map((x) => once(`detail:${x.movie.id}`, () => enrich(x.movie)).then((movie) => ({ ...x, movie })).catch(() => x)));
   return [...detailed, ...ranked.slice(DETAIL_TOP)];
 }
+
+/** One person's own picks draw on more of their favourites and liked crew than a group list does. */
+export const PERSONAL = { perPerson: 6, crewPerPerson: 4, maxSeeds: 6, maxPeople: 4 };

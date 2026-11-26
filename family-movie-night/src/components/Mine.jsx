@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Heart, X } from 'lucide-react';
 import { liking, tasteProfile } from '../lib/suggest.js';
+import ForYou from './ForYou.jsx';
 import MoviePicker from './MoviePicker.jsx';
 import { Chip, MovieRow, Poster, StatusStub } from './ui.jsx';
 
@@ -9,7 +10,7 @@ const TASTE_MIN = 8; // watched movies needed before the taste summary means any
 const MAX_FAVORITES = 10;
 
 /** Your profile: all-time favourites, what the app has learned about your taste, and everything you've rated. */
-export default function Mine({ entries, me, favorites, onAddFavorite, onRemoveFavorite, onOpen, onRate }) {
+export default function Mine({ entries, members, me, onWant, onPass, favorites, onAddFavorite, onRemoveFavorite, onOpen, onRate }) {
   const [tab, setTab] = useState('all');
   const mine = Object.values(entries)
     .filter((e) => e.ratings?.[me])
@@ -22,6 +23,8 @@ export default function Mine({ entries, me, favorites, onAddFavorite, onRemoveFa
 
   return (
     <div className="flex flex-col gap-5">
+      <ForYou entries={entries} members={members} me={me} onOpen={onOpen} onWant={onWant} onPass={onPass} />
+
       <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
         <div className="flex items-center gap-2"><Heart size={17} className="text-gold" fill="currentColor" /><h2 className="font-bold text-cream">My favourites of all time</h2></div>
         {favorites.length > 0 ? (

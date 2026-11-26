@@ -174,7 +174,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
   - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
 - **Search** — find one specific movie, or switch to **Directors** to look up a director or writer and browse everything they made.
-- **Mine** — your profile: up to ten **all-time favourites**, a summary of your taste by category, the directors and writers you keep liking, and everything you've rated.
+- **Mine** — your profile. At the top, **Movies you should like**: picks just for you that you haven't answered yet, drawn from movies like your favourites, directors and writers you keep liking, and movies someone else in the family rated 4 or higher. Each has **Want to watch** (adds it to your Want to list, so it shows up on Tonight), **Seen it** (opens the rating sheet) and an ✕ for No thanks. One director or favourite can't fill the list. Below that: up to ten **all-time favourites**, a summary of your taste by category, the directors and writers you keep liking, and everything you've rated.
 
 ### Ratings
 
@@ -301,6 +301,7 @@ src/
   components/
     Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
     History.jsx             past movie nights and after-the-movie scores
+    ForYou.jsx              "Movies you should like" on the Mine tab
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
     Ask.jsx                 the assistant chat
     Vote.jsx                the secret vote panel and result

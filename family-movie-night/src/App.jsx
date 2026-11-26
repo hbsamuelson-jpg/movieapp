@@ -196,7 +196,7 @@ export default function App() {
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
-          {tab === 'mine' && <Mine entries={entries} me={me} favorites={favorites} onAddFavorite={addFavorite} onRemoveFavorite={removeFavorite} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'mine' && <Mine entries={entries} members={members} me={me} onWant={(m) => rate(m, { status: 'unseen', stars: null })} onPass={(m) => rate(m, { status: 'pass', stars: null })} favorites={favorites} onAddFavorite={addFavorite} onRemoveFavorite={removeFavorite} onOpen={setOpen} onRate={() => go('rate')} />}
         </>
       )}
 

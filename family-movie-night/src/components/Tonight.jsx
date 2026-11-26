@@ -6,7 +6,6 @@ import { activeSnoozes, applyFilters, mergeSimilar, suggest } from '../lib/sugge
 import { discover, interestSeeds } from '../lib/discover.js';
 import { enrich, GENRE_CHOICES, similarTo } from '../lib/tmdb.js';
 import History from './History.jsx';
-import Services from './Services.jsx';
 import Stats from './Stats.jsx';
 import MoviePicker from './MoviePicker.jsx';
 import Vote from './Vote.jsx';
@@ -15,14 +14,13 @@ import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, P
 const RUNTIMES = [[0, 'Any length'], [90, '90 min'], [120, '2 hours'], [150, '2½ hours']];
 
 /** Who's here, what the app suggests for them, and the shortlist you put up for a choice or a spin. */
-export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, history, services, onServices, onSnooze, onWatch, onRemoveHistory, onOpen, onRate }) {
+export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, history, onSnooze, onWatch, onRemoveHistory, onOpen, onRate }) {
   const [filters, setFilters] = useState({ genre: '', certs: [], maxRuntime: 0 });
   const [showFilters, setShowFilters] = useState(false);
   const [spinning, setSpinning] = useState(null); // { pool, via } being spun, or null
   const [showHistory, setShowHistory] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [onlyOurs, setOnlyOurs] = useState(false); // limit the list to movies on the family's services
-  const [editServices, setEditServices] = useState(false);
+  const [stream, setStream] = useState('any'); // any | stream (no rental needed) | free (free with ads)
   const [showSnoozed, setShowSnoozed] = useState(false);
   const [skipped, setSkipped] = useState(() => pref.get('score-skipped', [])); // score prompts dismissed on this device
   const [limit, setLimit] = useState(20); // how many suggestions to show
@@ -69,9 +67,9 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
   }, [interestKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const snoozedIds = useMemo(() => activeSnoozes(members, presentIds), [members, presentIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
-  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list, services, snoozed: snoozedIds })), [entries, presentIds.join(), vibes, similar, seeking, found, services, snoozedIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list, snoozed: snoozedIds })), [entries, presentIds.join(), vibes, similar, seeking, found, snoozedIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const genres = useMemo(() => [...new Set(ranked.flatMap((e) => e.movie.genres || []))].sort(), [ranked]);
-  const filtered = applyFilters(ranked, { ...filters, services: onlyOurs ? services : [] });
+  const filtered = applyFilters(ranked, { ...filters, streamable: stream === 'stream', freeOnly: stream === 'free' });
   // Everyone's active snoozes among the people watching, for the "bring back" list.
   const snoozes = present.flatMap((m) => Object.entries(m.snoozed || {}).filter(([, until]) => until > Date.now()).map(([id, until]) => ({ member: m, id, until, movie: entries[id]?.movie || found.list.find((d) => String(d.movie.id) === id)?.movie || null }))).filter((x) => x.movie);
   const toScore = unscoredNights(history, entries, me);
@@ -97,7 +95,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
   const note = (e) => (
     <>
       <span className="font-bold text-gold">{e.score}% match</span>
-      <span className="text-dim"> · {e.lane === 'new' && !seeded ? `new to ${present.length > 1 ? 'everyone' : 'you'}${e.because ? ` · ${e.because}` : ''}` : `${wantText(e)}${e.alreadySeen ? ` · ${e.alreadySeen} already seen it` : e.rewatch ? ' · rewatch for some' : ''}`}{e.ours.length ? ` · on ${e.ours[0]}` : ''}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
+      <span className="text-dim"> · {e.lane === 'new' && !seeded ? `new to ${present.length > 1 ? 'everyone' : 'you'}${e.because ? ` · ${e.because}` : ''}` : `${wantText(e)}${e.alreadySeen ? ` · ${e.alreadySeen} already seen it` : e.rewatch ? ' · rewatch for some' : ''}`}{e.where.free.length ? ` · free on ${e.where.free[0]}` : e.where.included.length ? ` · on ${e.where.included[0]}` : e.movie.watch ? ' · rent only' : ''}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
     </>
   );
   const AddButton = ({ movie }) => {
@@ -180,11 +178,9 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         </div>
         {hasTmdb && <div className="flex flex-col gap-1.5">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Where to watch</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            {services.length > 0 && <Chip on={onlyOurs} onClick={() => setOnlyOurs((v) => !v)}>Only on our services</Chip>}
-            <button type="button" onClick={() => setEditServices((v) => !v)} aria-expanded={editServices} className="text-sm font-bold text-gold">{editServices ? 'Done' : services.length ? `Our services (${services.length})` : 'Pick your streaming services'}</button>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Where to watch">
+            {[['any', 'Anywhere'], ['stream', 'No rental needed'], ['free', 'Free only']].map(([key, label]) => <Chip key={key} on={stream === key} onClick={() => setStream(key)}>{label}</Chip>)}
           </div>
-          {editServices && <Services services={services} onChange={(next) => { onServices(next); if (!next.length) setOnlyOurs(false); }} />}
         </div>}
         <div className="flex flex-col gap-1.5">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Movies like…</h2>

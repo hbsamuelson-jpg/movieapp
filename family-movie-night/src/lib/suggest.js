@@ -123,8 +123,13 @@ function memberScore(rating, profile, movie) {
 }
 
 const SERVICE_BOOST = 6;
-/** Which of the family's services carry this movie: a list of service names (empty if none or unknown). */
-export const onOurServices = (movie, services = []) => (movie.watch?.on || []).map((s) => s.name).filter((name) => services.includes(name));
+/**
+ * Where this movie can be watched at no extra cost, assuming the family has every subscription:
+ * { free: [name] (free with ads), included: [name] (with a subscription) }. Both empty if it's
+ * rent-or-buy only, or not looked up yet.
+ */
+export const streaming = (movie) => ({ free: (movie.watch?.free || []).map((s) => s.name), included: (movie.watch?.on || []).map((s) => s.name) });
+const streams = (movie) => { const s = streaming(movie); return s.free.length + s.included.length > 0; };
 /** Movie ids that anyone in `memberIds` has snoozed and whose snooze hasn't run out. */
 export function activeSnoozes(members, memberIds, now = Date.now()) {
   const ids = new Set();
@@ -150,12 +155,12 @@ export function activeSnoozes(members, memberIds, now = Date.now()) {
  *   already seen   — minus 30 for each person watching who has seen it and didn't mark Watch again
  *   reviews        — a nudge of up to 4 points either way for the critic score
  *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
- *   services       — +6 when it streams on a service the family has
+ *   streaming      — +6 when it can be streamed without renting it
  *   snoozed        — movie ids someone watching said "not tonight" to: left out
  *
- * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }], services: string[], snoozed: Set }
+ * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }], snoozed: Set }
  */
-export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [], services = [], snoozed = new Set() } = {}) {
+export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [], snoozed = new Set() } = {}) {
   if (!presentIds.length) return [];
   const profiles = Object.fromEntries(presentIds.map((id) => [id, tasteProfile(entries, id)]));
   const seeded = similar.length > 0;
@@ -192,8 +197,8 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
 
     raw += qualityNudge(entry.movie); // better-reviewed movies edge ahead, only a little
 
-    const ours = onOurServices(entry.movie, services);
-    if (ours.length) raw += SERVICE_BOOST;
+    const where = streaming(entry.movie);
+    if (streams(entry.movie)) raw += SERVICE_BOOST;
 
     const vibes = priorityGenres.filter((g) => (entry.movie.genres || []).includes(g));
     if (vibes.length) raw += Math.min(25, 15 + 5 * (vibes.length - 1));
@@ -208,7 +213,7 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
       wanting: wanting.length,
       rewatch: parts.some((p) => p.kind === 'again' || p.kind === 'seen'),
       alreadySeen,
-      ours,
+      where,
       sim,
       vibes,
     });
@@ -262,13 +267,14 @@ export function voteResult(vote) {
   return { rows, cast, expected, everyoneIn: expected > 0 && (vote.voters || []).every((id) => (vote.voted || []).includes(id)), winners: top > 0 ? rows.filter((r) => r.votes === top).map((r) => r.movie) : [] };
 }
 
-/** filters: { genre: string | '', certs: string[], maxRuntime: number | 0, services: string[] (only movies streaming on one of these) } */
+/** filters: { genre: string | '', certs: string[], maxRuntime: number | 0, streamable: boolean (hide rent-or-buy-only movies), freeOnly: boolean } */
 export function applyFilters(list, filters) {
   return list.filter(({ movie }) => {
     if (filters.genre && !(movie.genres || []).includes(filters.genre)) return false;
     if (filters.certs?.length && !filters.certs.includes(movie.cert)) return false;
     if (filters.maxRuntime && !(movie.runtime && movie.runtime <= filters.maxRuntime)) return false;
-    if (filters.services?.length && !onOurServices(movie, filters.services).length) return false;
+    if (filters.streamable && !streams(movie)) return false;
+    if (filters.freeOnly && !streaming(movie).free.length) return false;
     return true;
   });
 }

@@ -1,7 +1,7 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
 import { familyStats, unscoredNights } from '../src/lib/stats.js';
-import { voteResult, liking, quality, qualityNudge, shownStars, forYou, activeSnoozes, applyFilters, onOurServices, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { voteResult, liking, quality, qualityNudge, shownStars, forYou, activeSnoozes, applyFilters, streaming, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -180,17 +180,18 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   assert.ok(picks.every((p) => p.match >= 0 && p.match <= 100));
 }
 
-// Where to watch: a boost for our services, and a filter that keeps only those.
+// Where to watch: a boost for anything streamable, and filters for "no rental" and "free".
 {
-  const on = (id, title, names) => ({ ...movie(id, title, ['Comedy']), watch: { at: Date.now(), on: names.map((name) => ({ name })) } });
-  const N = on(801, 'OnNetflix', ['Netflix']), H = on(802, 'OnHulu', ['Hulu']), U = movie(803, 'Unknown', ['Comedy']);
+  const on = (id, title, included, free = []) => ({ ...movie(id, title, ['Comedy']), watch: { v: 2, at: Date.now(), on: included.map((name) => ({ name })), free: free.map((name) => ({ name })), rent: ['Apple TV Store'] } });
+  const N = on(801, 'OnNetflix', ['Netflix']), H = on(802, 'FreeOnTubi', [], ['Tubi']), U = on(803, 'RentOnly', []);
   const es = { 801: { movie: N, ratings: { a: want } }, 802: { movie: H, ratings: { a: want } }, 803: { movie: U, ratings: { a: want } } };
-  const plain = suggest(es, ['a']);
-  const ours = suggest(es, ['a'], { services: ['Netflix'] });
-  assert.equal(ours[0].movie.id, 801);
-  assert.equal(ours.find((e) => e.movie.id === 801).rank - plain.find((e) => e.movie.id === 801).rank, 6);
-  assert.deepEqual(onOurServices(H, ['Netflix']), []);
-  assert.deepEqual(applyFilters(ours, { certs: [], services: ['Netflix'] }).map((e) => e.movie.id), [801]);
+  const list = suggest(es, ['a']);
+  const rank = (id) => list.find((e) => e.movie.id === id).rank;
+  assert.equal(rank(801) - rank(803), 6);
+  assert.equal(rank(802) - rank(803), 6);
+  assert.deepEqual(streaming(H), { free: ['Tubi'], included: [] });
+  assert.deepEqual(applyFilters(list, { certs: [], streamable: true }).map((e) => e.movie.id).sort(), [801, 802]);
+  assert.deepEqual(applyFilters(list, { certs: [], freeOnly: true }).map((e) => e.movie.id), [802]);
   // Snoozed movies are left out, but only while the snooze lasts and only for people watching.
   const people = [{ id: 'a', snoozed: { 801: 2000, 802: 500 } }, { id: 'b', snoozed: { 803: 2000 } }];
   assert.deepEqual([...activeSnoozes(people, ['a'], 1000)], ['801']);

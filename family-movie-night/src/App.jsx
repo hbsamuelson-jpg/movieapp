@@ -93,7 +93,6 @@ export default function App() {
   if (!data) return <Shell><Centered>Loading…</Centered></Shell>;
 
   const { entries, shortlist, vote, history } = data;
-  const services = data.services || [];
   const myself = members.find((m) => m.id === me);
   if (!myself) {
     return (
@@ -195,7 +194,7 @@ export default function App() {
         />
       ) : (
         <>
-          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} services={services} onServices={(list) => store.setServices(list)} onSnooze={(memberId, movie, until) => store.snooze(memberId, String(movie.id), until)} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} onSnooze={(memberId, movie, until) => store.snooze(memberId, String(movie.id), until)} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
@@ -204,7 +203,7 @@ export default function App() {
       )}
 
       {open && (
-        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} services={services} snoozedUntil={(myself.snoozed?.[open.id] || 0) > Date.now() ? myself.snoozed[open.id] : null} onSnooze={(movie, until) => store.snooze(me, String(movie.id), until)} onToggleListed={toggleListed} onWatched={(movie) => logWatched(movie, 'pick', present.map((m) => m.id))} onSave={rate} onClose={() => setOpen(null)} />
+        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} snoozedUntil={(myself.snoozed?.[open.id] || 0) > Date.now() ? myself.snoozed[open.id] : null} onSnooze={(movie, until) => store.snooze(me, String(movie.id), until)} onToggleListed={toggleListed} onWatched={(movie) => logWatched(movie, 'pick', present.map((m) => m.id))} onSave={rate} onClose={() => setOpen(null)} />
       )}
     </Shell>
   );

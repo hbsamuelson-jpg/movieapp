@@ -12,7 +12,6 @@
 //   endVote()                              close it and show the result
 //   clearVote()                            remove it
 //   addHistory(entry) / removeHistory(id)  the log of movies watched together
-//   setServices(names)                     the streaming services this family has
 //   snooze(memberId, movieId, until | null)  hide a movie from that person's suggestions until a date
 //
 // A vote is stored as { id, open, ranked, options: [movie], voters: [id], voted: [id], tally: { movieId: n } }.
@@ -108,9 +107,6 @@ export function createLocalStore() {
     },
     removeHistory(id) {
       commit({ ...state, history: state.history.filter((h) => h.id !== id) });
-    },
-    setServices(services) {
-      commit({ ...state, services });
     },
     snooze(memberId, movieId, until) {
       commit({ ...state, members: state.members.map((m) => {
@@ -213,9 +209,6 @@ export function createSharedStore(spaceId = defaultSpace) {
     },
     removeHistory(id) {
       return updateDoc(space, { history: history.filter((h) => h.id !== id) });
-    },
-    setServices(services) {
-      return setDoc(space, { services }, { mergeFields: ['services'] });
     },
     snooze(memberId, movieId, until) {
       return updateDoc(space, { [`members.${memberId}.snoozed.${movieId}`]: until || deleteField() });

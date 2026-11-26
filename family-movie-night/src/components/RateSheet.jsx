@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Check, Clock, Play, Plus, X } from 'lucide-react';
 import { shownStars } from '../lib/suggest.js';
-import { enrich, trailerUrl } from '../lib/tmdb.js';
+import { enrich, pricesUrl, trailerUrl } from '../lib/tmdb.js';
 
 const SNOOZE = 21 * 24 * 60 * 60 * 1000; // "not tonight" hides a movie for three weeks
 const day = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub, TitleLink } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
-export default function RateSheet({ movie: initial, entry, members, me, listed, services = [], snoozedUntil, onSnooze, onToggleListed, onWatched, onSave, onClose }) {
+export default function RateSheet({ movie: initial, entry, members, me, listed, snoozedUntil, onSnooze, onToggleListed, onWatched, onSave, onClose }) {
   const [movie, setMovie] = useState(entry?.movie?.detailed ? entry.movie : initial);
   const mine = entry?.ratings?.[me];
   const [status, setStatus] = useState(mine?.status || null);
@@ -63,12 +63,16 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
         {movie.watch && (
           <div className="flex flex-col gap-1.5">
             <div className="text-xs font-bold uppercase tracking-widest text-dim">Where to watch</div>
-            {movie.watch.on.length ? (
-              <ul className="flex flex-wrap gap-1.5">
-                {movie.watch.on.map((s) => <li key={s.name} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${services.includes(s.name) ? 'border-gold bg-gold/15 text-gold' : 'border-aisle text-cream'}`}>{s.name}{services.includes(s.name) ? ' ✓' : ''}</li>)}
-              </ul>
-            ) : <p className="text-sm text-dim">{movie.watch.rent ? 'Not on a streaming service right now. You can rent or buy it.' : "Not streaming in the US right now."}</p>}
-            <p className="text-[11px] text-dim">Streaming info from JustWatch, US. It can lag by a few days.</p>
+            {[['Free', movie.watch.free || [], 'border-gold bg-gold/15 text-gold'], ['Included with', movie.watch.on || [], 'border-aisle text-cream']].filter(([, list]) => list.length).map(([label, list, style]) => (
+              <div key={label} className="flex flex-wrap items-center gap-1.5">
+                <span className="w-24 shrink-0 text-xs text-dim">{label}</span>
+                {list.map((s) => <span key={s.name} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${style}`}>{s.name}</span>)}
+              </div>
+            ))}
+            {!(movie.watch.free || []).length && !(movie.watch.on || []).length && (
+              <p className="text-sm text-dim">{(movie.watch.rent || []).length ? `Not on any streaming service right now. Rent or buy it on ${movie.watch.rent.slice(0, 3).join(', ')}.` : 'Not available to stream, rent or buy in the US right now.'}</p>
+            )}
+            <p className="text-[11px] text-dim">From JustWatch, US; can lag a few days. {(movie.watch.rent || []).length > 0 && <a href={pricesUrl(movie)} target="_blank" rel="noopener noreferrer" className="font-bold text-cream underline">Compare rental prices</a>}</p>
           </div>
         )}
 
@@ -94,13 +98,13 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="text-xs font-bold uppercase tracking-widest text-dim">Haven't watched it</div>
+          <div className={`text-xs font-bold uppercase tracking-widest text-dim ${stars > 0 ? 'opacity-40' : ''}`}>Haven't watched it</div>
           <div className="grid grid-cols-3 gap-2">
             {NOT_WATCHED.map((key) => {
               const s = STATUS[key];
               const on = status === key;
               return (
-                <button key={key} type="button" aria-pressed={on} onClick={() => pickNotWatched(key)} className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-sm font-bold transition ${on ? 'bg-gold text-house' : 'bg-house text-cream'}`}>
+                <button key={key} type="button" aria-pressed={on} onClick={() => pickNotWatched(key)} className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-sm font-bold transition ${on ? 'bg-gold text-house' : stars > 0 ? 'bg-house text-dim opacity-40' : 'bg-house text-cream'}`}>
                   <s.icon size={20} />
                   {s.label}
                 </button>

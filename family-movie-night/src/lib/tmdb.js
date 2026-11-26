@@ -225,9 +225,9 @@ export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew
 /* ---------- Where to watch ---------- */
 // TMDB relays JustWatch's list of which US services carry each movie. The same service shows up
 // under several names ("Paramount Plus Premium", "Paramount+ Amazon Channel"), so each is folded
-// into one plain name. That name is also what a family ticks under "our services".
+// into one plain name. The app assumes the family has every subscription service.
 const WATCH_TTL = 14 * 24 * 60 * 60 * 1000; // catalogues change; look again after two weeks
-const watchFresh = (movie) => Boolean(movie.watch && Date.now() - movie.watch.at < WATCH_TTL);
+const watchFresh = (movie) => Boolean(movie.watch && movie.watch.v === 2 && Date.now() - movie.watch.at < WATCH_TTL);
 const SERVICE_NAMES = [
   [/^netflix/i, 'Netflix'], [/prime video/i, 'Prime Video'], [/^disney/i, 'Disney+'], [/^(hbo )?max\b/i, 'HBO Max'],
   [/^hulu/i, 'Hulu'], [/^apple tv/i, 'Apple TV+'], [/^paramount/i, 'Paramount+'], [/^peacock/i, 'Peacock'],
@@ -235,23 +235,29 @@ const SERVICE_NAMES = [
   [/^criterion/i, 'Criterion Channel'], [/^tubi/i, 'Tubi'], [/^pluto/i, 'Pluto TV'], [/roku channel/i, 'The Roku Channel'],
   [/^kanopy/i, 'Kanopy'], [/^hoopla/i, 'Hoopla'], [/^youtube premium/i, 'YouTube Premium'], [/^fubo/i, 'fuboTV'],
 ];
-/** The services a family can tick, most common first. */
-export const SERVICES = SERVICE_NAMES.map(([, name]) => name);
 export function serviceName(raw) {
   if (/justwatch/i.test(raw)) return null;
   const known = SERVICE_NAMES.find(([pattern]) => pattern.test(raw));
   if (known) return known[1];
   return raw.replace(/ (amazon|apple tv|roku premium) channel$/i, '').replace(/ (standard )?with ads$/i, '').trim();
 }
+const WATCH_VERSION = 2;
+/**
+ * { v, at, on: [{ name }], free: [{ name }], rent: [name] }
+ *   on   — included with a subscription
+ *   free — free to watch, usually with ads (and not also in `on`)
+ *   rent — stores that rent or sell it
+ * TMDB passes along which services carry a movie but not what they charge, so there are no prices here.
+ */
 function whereToWatch(results) {
   const us = results?.US || {};
-  const on = [];
-  for (const p of [...(us.flatrate || []), ...(us.free || []), ...(us.ads || [])]) {
-    const name = serviceName(p.provider_name);
-    if (name && !on.some((x) => x.name === name)) on.push({ name });
-  }
-  return { at: Date.now(), on: on.slice(0, 8), rent: Boolean(us.rent?.length || us.buy?.length) };
+  const names = (list) => [...new Set((list || []).map((p) => serviceName(p.provider_name)).filter(Boolean))];
+  const on = names(us.flatrate);
+  const free = names([...(us.free || []), ...(us.ads || [])]).filter((name) => !on.includes(name));
+  return { v: WATCH_VERSION, at: Date.now(), on: on.slice(0, 8).map((name) => ({ name })), free: free.slice(0, 6).map((name) => ({ name })), rent: names([...(us.rent || []), ...(us.buy || [])]).slice(0, 4) };
 }
+/** Where prices for every service are listed. */
+export const pricesUrl = (movie) => `https://www.justwatch.com/us/search?q=${encodeURIComponent(movie.title || '')}`;
 /** The official YouTube trailer's id, or null. */
 function trailerKey(videos) {
   const list = (videos || []).filter((v) => v.site === 'YouTube' && v.type === 'Trailer');

@@ -166,7 +166,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
   Ways to steer it:
   - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
   - **Time tonight:** Any length, 90 min, 2 hours or 2½ hours. Longer movies are hidden.
-  - **Where to watch:** tick the streaming services your family has (shared by everyone). Movies on them get a small lift and say "on Netflix"; **Only on our services** hides everything else.
+  - **Where to watch:** the app assumes you have every subscription service. Each movie says "on Disney+", "free on Tubi" or "rent only". **No rental needed** hides rent-or-buy-only movies; **Free only** keeps just the ones that are free to watch.
   - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, with everyone's vetoes still applied.
 
   The list shows the top 20, with **Show more** underneath. Put movies on the shared shortlist with **+**, then choose together, **Spin**, or hold a **Secret vote** (below). Filters (MPAA rating, genre) are behind the Filters button.
@@ -206,7 +206,9 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
-**Movie page extras.** **Trailer** opens the official trailer on YouTube (or a YouTube search when TMDB has none). **Where to watch** lists the US streaming services carrying the movie, with yours ticked. That list comes from JustWatch through TMDB, is refreshed every two weeks, and can lag; service names are shown as text. Add-on channels are folded into the service ("AMC+ Amazon Channel" counts as AMC+).
+**Movie page extras.** **Trailer** opens the official trailer on YouTube (or a YouTube search when TMDB has none). **Where to watch** shows, for the US: **Free** (free services, usually with ads, or free with a library card such as Kanopy and Hoopla), **Included with** (subscription services), or the stores that rent or sell it. The data comes from JustWatch through TMDB, is refreshed every two weeks and can lag. It says which services carry a movie but not what they charge, so there are no prices in the app; **Compare rental prices** opens JustWatch, which lists them. Service names are shown as text. Add-on channels are folded into the service ("AMC+ Amazon Channel" counts as AMC+).
+
+**Rating sheet.** Once you give stars, the three "Haven't watched it" buttons grey out. Tapping one still works: it clears the stars and switches your answer.
 
 **Title links.** On a movie's detail sheet and on the Quick Swipe card, the title opens Rotten Tomatoes in a new tab. It goes to their search results for that title (the movie is the top result), because nothing the app has access to gives a movie's exact Rotten Tomatoes address.
 
@@ -227,7 +229,7 @@ Each present person then contributes a score out of 100: Want to 92, Watch again
 
 People who aren't watching tonight don't count, including their vetoes.
 
-**Our services.** A movie streaming on a service the family ticked gets +6. Movies whose streaming info hasn't been fetched yet count as not on your services when the filter is on.
+**Streaming lift.** A movie that can be streamed without renting gets +6. Movies whose streaming info hasn't been fetched yet count as rent-only when a Where to watch filter is on.
 
 **In the mood for.** Each priority genre a movie matches adds to its score: +15 for the first, +5 for each further one, up to +25. It changes the order, never what's shown.
 
@@ -250,7 +252,6 @@ groups/family                         ← the one shared space for this site
     "p7m1zz0c": { name: "Henry",  joinedAt: timestamp }
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
-  services: [ "Netflix", "Disney+" ]      // streaming services the family has
   ai: { day: "2026-11-26", count: 7 }     // assistant questions asked today
   history: [                              // past movie nights, newest first
     { id: "h1a2b3c4", at: 1795700000000,  // when (ms)
@@ -283,7 +284,10 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     imdb: "tt0088763",
     rt: null, mc: 88,                 // Rotten Tomatoes and Metacritic scores, 0–100 or null
     scored: 2,                        // critic-score lookup done (version number)
-    watch: { at: 1795700000000, on: [ { name: "Disney+" } ], rent: true },  // US streaming, and when it was checked
+    watch: { v: 2, at: 1795700000000,                       // US availability, and when it was checked
+             on: [ { name: "Disney+" } ],                   // included with a subscription
+             free: [ { name: "Tubi" } ],                    // free to watch
+             rent: [ "Apple TV Store" ] },                  // stores that rent or sell it
     trailer: "Rvr68u6k5sI",           // YouTube id of the official trailer, or null
     detailed: true                    // runtime + cert have been fetched
   }
@@ -325,7 +329,6 @@ src/
     Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
     History.jsx             past movie nights and after-the-movie scores
     Stats.jsx               family stats
-    Services.jsx            tick the family's streaming services
     ForYou.jsx              "Movies you should like" on the Mine tab
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
     Ask.jsx                 the assistant chat

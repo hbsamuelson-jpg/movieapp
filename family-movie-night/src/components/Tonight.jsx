@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Dices, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Check, ChevronDown, Dices, Plus, SlidersHorizontal, X } from 'lucide-react';
 import { CERTS } from '../lib/config.js';
 import { applyFilters, mergeSimilar, suggest } from '../lib/suggest.js';
-import { enrich, GENRE_CHOICES, searchMovies, similarTo } from '../lib/tmdb.js';
+import { discover, interestSeeds } from '../lib/discover.js';
+import { enrich, GENRE_CHOICES, similarTo } from '../lib/tmdb.js';
+import MoviePicker from './MoviePicker.jsx';
 import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, Poster } from './ui.jsx';
 
 const RUNTIMES = [[0, 'Any length'], [90, '90 min or less'], [105, '1h 45m or less'], [120, '2 hours or less']];
@@ -32,15 +34,36 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
     });
   }, [seeds]); // eslint-disable-line react-hooks/exhaustive-deps
   const seeking = seeds.some((seed) => !simLists[seed.id]);
+  const [lane, setLane] = useState('all');
+  const [found, setFound] = useState({ key: '', list: [] }); // unwatched movies that fit the group's interests
+  const [finding, setFinding] = useState(false);
   const similar = useMemo(() => mergeSimilar(seeds.map((seed) => simLists[seed.id] || []), seeds.map((seed) => seed.id)), [seeds, simLists]);
 
   const present = members.filter((m) => !away.includes(m.id));
   const presentIds = present.map((m) => m.id);
   const toggle = onToggleAway;
 
-  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar })), [entries, presentIds.join(), vibes, similar, seeking]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh the discoveries when the people watching, or what their taste points at, changes.
+  const interests = useMemo(() => interestSeeds(entries, members, presentIds), [entries, members, presentIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const interestKey = `${presentIds.join()}|${interests.seeds.map((m) => m.id).join()}|${interests.people.map((p) => p.id).join()}`;
+  useEffect(() => {
+    let live = true;
+    setFinding(true);
+    discover(entries, members, presentIds)
+      .then((list) => { if (live) setFound({ key: interestKey, list }); })
+      .catch(() => { if (live) setFound({ key: interestKey, list: [] }); })
+      .finally(() => { if (live) setFinding(false); });
+    return () => { live = false; };
+  }, [interestKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list })), [entries, presentIds.join(), vibes, similar, seeking, found]); // eslint-disable-line react-hooks/exhaustive-deps
   const genres = useMemo(() => [...new Set(ranked.flatMap((e) => e.movie.genres || []))].sort(), [ranked]);
-  const shown = applyFilters(ranked, filters);
+  const filtered = applyFilters(ranked, filters);
+  // Wanted movies always come first; new discoveries fill in underneath.
+  const shown = seeds.length ? filtered
+    : lane === 'all' ? [...filtered.filter((e) => e.lane === 'wanted'), ...filtered.filter((e) => e.lane === 'new')]
+      : filtered.filter((e) => e.lane === lane);
+  const laneCount = (key) => filtered.filter((e) => e.lane === key).length;
   const activeFilters = (filters.genre ? 1 : 0) + filters.certs.length + (filters.maxRuntime ? 1 : 0);
   const toggleCert = (c) => setFilters((f) => ({ ...f, certs: f.certs.includes(c) ? f.certs.filter((x) => x !== c) : [...f.certs, c] }));
 
@@ -56,7 +79,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
   const note = (e) => (
     <>
       <span className="font-bold text-gold">{e.score}% match</span>
-      <span className="text-dim"> · {wantText(e)}{e.rewatch ? ' · rewatch for some' : ''}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
+      <span className="text-dim"> · {e.lane === 'new' && !seeded ? `new to ${present.length > 1 ? 'everyone' : 'you'}${e.because ? ` · ${e.because}` : ''}` : `${wantText(e)}${e.rewatch ? ' · rewatch for some' : ''}`}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
     </>
   );
   const AddButton = ({ movie }) => {
@@ -99,7 +122,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         </div>
         <div className="flex flex-col gap-1.5">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Movies like…</h2>
-          <SeedPicker seeds={seeds} onAdd={(m) => setSeeds((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))} onRemove={(id) => setSeeds((list) => list.filter((x) => x.id !== id))} />
+          <MoviePicker id="seed-search" chosen={seeds} placeholder={seeds.length ? 'Add another movie' : 'Type a movie, e.g. Knives Out'} label="Find movies similar to" onAdd={(m) => setSeeds((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))} onRemove={(id) => setSeeds((list) => list.filter((x) => x.id !== id))} />
           {simError && <Notice>{simError}</Notice>}
         </div>
       </section>
@@ -127,8 +150,8 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
       <section className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-cream">{seeded ? `Like ${seedNames}` : `Suggested for ${names}`}</h2>
-            <p className="text-sm text-dim">{seeded ? `Similar movies, ranked for ${names}. Anything someone here ruled out is left off.` : "Ranked from everyone's ratings and what each person tends to like."}</p>
+            <h2 className="text-xl font-bold text-cream">{seeded ? `Like ${seedNames}` : `Tonight for ${names}`}</h2>
+            <p className="text-sm text-dim">{seeded ? `Similar movies, ranked for ${names}. Anything someone here ruled out is left off.` : `Movies someone here wants to watch, plus ones nobody here has seen that fit what ${present.length > 1 ? 'you all' : 'you'} like.`}</p>
           </div>
           <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${activeFilters ? 'border-gold text-gold' : 'border-aisle text-cream'}`}>
             <SlidersHorizontal size={15} /> Filters{activeFilters ? ` (${activeFilters})` : ''}
@@ -146,69 +169,30 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
           </div>
         )}
 
+        {!seeded && (
+          <div className="no-scrollbar -mx-4 flex items-center gap-2 overflow-x-auto px-4">
+            <Chip on={lane === 'all'} onClick={() => setLane('all')}>All {filtered.length}</Chip>
+            <Chip on={lane === 'wanted'} onClick={() => setLane('wanted')}>Wanted {laneCount('wanted')}</Chip>
+            <Chip on={lane === 'new'} onClick={() => setLane('new')}>New to {present.length > 1 ? 'us' : 'me'} {laneCount('new')}</Chip>
+            {finding && <span className="shrink-0 text-xs text-dim">Finding more…</span>}
+          </div>
+        )}
+
         {shown.length ? (
           <ol className="-mx-2 flex flex-col divide-y divide-aisle/60">
-            {shown.slice(0, 40).map((e, n) => (
+            {shown.slice(0, 60).map((e, n) => (
               <MovieRow key={e.movie.id} movie={e.movie} index={n + 1} onOpen={onOpen} note={note(e)} aside={<MemberDots entry={e} members={present} />} action={<AddButton movie={e.movie} />} />
             ))}
           </ol>
         ) : (
           <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-aisle p-5 text-sm text-dim">
-            <p>{seeking ? `Finding movies like ${seedNames}…` : ranked.length ? 'Nothing matches these filters.' : seeded ? `Nothing similar to ${seedNames} is left after everyone's vetoes. Try a different movie.` : 'No suggestions yet. They appear once someone here marks a movie Want to or Watch again, and get sharper the more each person rates. Or type a movie under "Movies like…" above.'}</p>
+            <p>{seeking ? `Finding movies like ${seedNames}…` : ranked.length ? 'Nothing matches these filters.' : seeded ? `Nothing similar to ${seedNames} is left after everyone's vetoes. Try a different movie.` : finding ? 'Looking for movies you might like…' : 'Nothing here yet. Mark a few movies Want to, add your all-time favourites under Mine, or rate what you have watched, and this fills up with wanted movies and new ones that fit your taste.'}</p>
             <button type="button" onClick={onRate} className="rounded-lg bg-velvet px-4 py-2 font-bold text-cream">Rate some movies</button>
           </div>
         )}
       </section>
 
       {spinning && <SpinReel pool={spinPool} onClose={() => setSpinning(false)} onOpen={(m) => { setSpinning(false); onOpen(m); }} />}
-    </div>
-  );
-}
-
-/** Type a title, pick it from the results, and it becomes a "movies like this" reference. */
-function SeedPicker({ seeds, onAdd, onRemove }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) { setResults([]); return undefined; }
-    let live = true;
-    const timer = setTimeout(() => {
-      searchMovies(q).then((list) => live && setResults(list.slice(0, 6))).catch(() => live && setResults([]));
-    }, 300);
-    return () => { live = false; clearTimeout(timer); };
-  }, [query]);
-
-  return (
-    <div className="flex flex-col gap-2">
-      {seeds.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {seeds.map((m) => (
-            <span key={m.id} className="inline-flex items-center gap-1 rounded-full bg-gold py-1 pl-3 pr-1 text-sm font-bold text-house">
-              {m.title}
-              <button type="button" onClick={() => onRemove(m.id)} aria-label={`Remove ${m.title}`} className="rounded-full p-1 hover:bg-black/10"><X size={14} /></button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="relative">
-        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dim" />
-        <input id="seed-search" type="search" autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={seeds.length ? 'Add another movie' : 'Type a movie, e.g. Knives Out'} aria-label="Find movies similar to" className="w-full rounded-full border border-aisle bg-seat py-2.5 pl-9 pr-3 text-sm text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
-      </div>
-      {results.length > 0 && (
-        <ul className="flex flex-col overflow-hidden rounded-xl border border-aisle bg-seat">
-          {results.map((m) => (
-            <li key={m.id}>
-              <button type="button" onClick={() => { onAdd(m); setQuery(''); setResults([]); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-aisle">
-                <span className="w-7 shrink-0"><Poster movie={m} size="w92" className="rounded-sm" /></span>
-                <span className="min-w-0 flex-1 truncate font-bold text-cream">{m.title}</span>
-                <span className="tabular-nums text-dim">{m.year || ''}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

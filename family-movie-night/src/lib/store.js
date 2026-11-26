@@ -3,13 +3,14 @@
 //   addMember(name)          -> the new (or existing, if the name is taken) member id
 //   removeMember(id)
 //   linkMember(id, uid | null)   tie a name to a Google account, or untie it
+//   setFavorites(id, movies)     a person's all-time favourites
 //   setRating(movie, memberId, rating | null)
 //   updateMovie(movie)       refresh stored movie details
 //   setShortlist(movies)     tonight's shortlist
 // The local store keeps everything in one browser. The shared store keeps it in Firestore,
 // so every device that opens the site sees the same names, ratings and shortlist.
 
-import { collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, deleteField, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from './firebase.js';
 
 const LOCAL_KEY = 'fmn-local-v4';
@@ -48,6 +49,9 @@ export function createLocalStore() {
       commit({ ...state, members: state.members.filter((m) => m.id !== id) });
     },
     linkMember() { /* Google linking needs the shared store */ },
+    setFavorites(id, favorites) {
+      commit({ ...state, members: state.members.map((m) => (m.id === id ? { ...m, favorites } : m)) });
+    },
     setRating(movie, memberId, rating) {
       const id = String(movie.id);
       const prev = state.entries[id] || { movie, ratings: {} };
@@ -84,7 +88,7 @@ export function createSharedStore(spaceId = 'family') {
       const emit = () => head && entries && cb({ ...head, entries });
       const stopSpace = onSnapshot(space, (snap) => {
         const data = snap.data() || {}; // no document yet: nobody has added a name
-        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null })).sort(byName);
+        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null, favorites: m.favorites || [] })).sort(byName);
         head = { members, shortlist: data.shortlist || [] };
         emit();
       }, onError);
@@ -115,6 +119,10 @@ export function createSharedStore(spaceId = 'family') {
     },
     removeMember(id) {
       return setDoc(space, { members: { [id]: deleteField() } }, { merge: true });
+    },
+    setFavorites(id, favorites) {
+      // updateDoc with a dotted path replaces just this person's list (a merge would not shrink it).
+      return updateDoc(space, { [`members.${id}.favorites`]: favorites });
     },
     setRating(movie, memberId, rating) {
       return setDoc(

@@ -5,9 +5,12 @@
 //   not watched:  'unseen' (want to)          'meh'   (don't care)         'pass' (no thanks)
 //   from Rank 5:  { status: 'seen', stars: null, like, via: 'rank', place, of }
 //                 `like` is a hidden 0–5 taste signal. It is never shown as a star rating.
+//   a favourite:  { status: 'seen', stars: null, like: 5, via: 'favorite' }  (counts double)
+//
+// A movie may carry crew: [{ id, name, role: 'director' | 'writer' }].
 
-/** Stars the person actually gave. A Rank 5 result has none, whatever it stores internally. */
-export const shownStars = (r) => (r && r.via !== 'rank' && typeof r.stars === 'number' && r.stars > 0 ? r.stars : null);
+/** Stars the person actually gave. Rank 5 results and favourites have none, whatever they store internally. */
+export const shownStars = (r) => (r && !r.via && typeof r.stars === 'number' && r.stars > 0 ? r.stars : null);
 
 /** How much the person liked it, 0–5: their stars, or the hidden signal from a ranking. */
 export const liking = (r) => {
@@ -19,23 +22,36 @@ export const liking = (r) => {
 const rated = (r) => liking(r) != null;
 
 /**
- * What one person likes, learned from their star ratings.
- * Returns { count, mean, genres: [{ name, n, avg, score }] } with genres sorted best first.
- * `score` is the genre average pulled toward the person's overall mean when there are few ratings.
+ * What one person likes, learned from what they've watched.
+ * Returns { count, mean, genres, people }:
+ *   genres  [{ name, n, avg, score }] best first. `score` is the genre average pulled toward the
+ *           person's overall mean when there are few ratings.
+ *   people  [{ id, name, role, n, avg }] directors and writers behind movies they rated 4 or
+ *           higher, at least twice (an all-time favourite counts double, so one is enough).
  */
 export function tasteProfile(entries, memberId) {
   const byGenre = {};
+  const byPerson = {};
   let sum = 0;
   let count = 0;
   for (const entry of Object.values(entries)) {
     const r = entry.ratings?.[memberId];
     if (!rated(r)) continue;
-    sum += liking(r);
-    count += 1;
+    const liked = liking(r);
+    const weight = r.via === 'favorite' ? 2 : 1;
+    sum += liked * weight;
+    count += weight;
     for (const g of entry.movie.genres || []) {
       byGenre[g] ||= { name: g, n: 0, sum: 0 };
-      byGenre[g].n += 1;
-      byGenre[g].sum += liking(r);
+      byGenre[g].n += weight;
+      byGenre[g].sum += liked * weight;
+    }
+    if (liked >= 4) {
+      for (const c of entry.movie.crew || []) {
+        byPerson[c.id] ||= { id: c.id, name: c.name, role: c.role, n: 0, sum: 0 };
+        byPerson[c.id].n += weight;
+        byPerson[c.id].sum += liked * weight;
+      }
     }
   }
   const mean = count ? sum / count : 3.5;
@@ -43,8 +59,15 @@ export function tasteProfile(entries, memberId) {
   const genres = Object.values(byGenre)
     .map((g) => ({ name: g.name, n: g.n, avg: g.sum / g.n, score: (g.sum + K * mean) / (g.n + K) }))
     .sort((a, b) => b.score - a.score);
-  return { count, mean, genres };
+  const people = Object.values(byPerson)
+    .filter((p) => p.n >= 2)
+    .map((p) => ({ id: p.id, name: p.name, role: p.role, n: p.n, avg: p.sum / p.n }))
+    .sort((a, b) => b.n * b.avg - a.n * a.avg);
+  return { count, mean, genres, people };
 }
+
+/** The directors or writers of this movie that the person has a track record of liking. */
+export const likedCrew = (profile, movie) => (movie.crew || []).filter((c) => (profile.people || []).some((p) => p.id === c.id));
 
 /** Guess how many stars (0.5–5) this person would give a movie they haven't rated. */
 export function predictStars(profile, movie) {
@@ -54,7 +77,9 @@ export function predictStars(profile, movie) {
   const taste = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : profile.mean;
   // Lean on the crowd until there are enough ratings to trust the person's own taste.
   const trust = Math.min(0.7, profile.count / 30);
-  return Math.max(0.5, Math.min(5, taste * trust + crowd * (1 - trust)));
+  // A director or writer they keep liking is worth half a star.
+  const bonus = likedCrew(profile, movie).length ? 0.5 : 0;
+  return Math.max(0.5, Math.min(5, taste * trust + crowd * (1 - trust) + bonus));
 }
 
 /** One person's enthusiasm for one movie, 0–100, or a veto. */
@@ -71,53 +96,61 @@ function memberScore(rating, profile, movie) {
 }
 
 /**
- * Rank movies for the people who are here tonight.
+ * Rank movies for the people who are here tonight. Two kinds of movie make the list:
  *
- * Without seeds: a movie is suggested when nobody present ruled it out and at least one person
- * present wants to watch (or rewatch) it.
+ *   wanted — nobody present ruled it out and at least one person present marked it Want to
+ *            or Watch again.
+ *   new    — a discovery (from `discoveries`): nobody present has watched it or ruled it out,
+ *            and it resembles what they love or comes from a director or writer they like.
  *
- * With `similar` (from "Movies like…"): the list becomes the movies similar to the seeds.
- * Nobody needs to have asked for them, but vetoes still apply, and a movie everyone present
- * has already watched is left out.
+ * With `similar` (from "Movies like…") the list is instead the movies similar to the seeds:
+ * vetoes still apply, and a movie everyone present has already watched is left out.
  *
- * Everyone is scored from their rating, or from their taste profile if they haven't rated it.
- * The group score favours picks nobody will hate. Then two steers are applied:
+ * Everyone is scored from their own answer, or from their taste profile if they haven't given
+ * one. The group score favours picks nobody will hate. Then:
+ *   new movies     — 75% group score, 25% how closely they match the group's interests
+ *   similar        — 65% group score, 35% similarity to the seeds
  *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
- *   similar        — blends 65% group score with 35% similarity to the seeds
  *
- * options: { priorityGenres: string[], similar: [{ movie, sim }] }
+ * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }] }
  */
-export function suggest(entries, presentIds, { priorityGenres = [], similar = [] } = {}) {
+export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [] } = {}) {
   if (!presentIds.length) return [];
   const profiles = Object.fromEntries(presentIds.map((id) => [id, tasteProfile(entries, id)]));
   const seeded = similar.length > 0;
   const simById = new Map(similar.map((x) => [String(x.movie.id), x]));
 
-  // Candidates: everything anyone has rated, plus (when seeded) similar movies nobody has touched.
   const candidates = seeded
-    ? similar.map((x) => entries[x.movie.id] || { movie: x.movie, ratings: {} })
-    : Object.values(entries);
+    ? similar.map((x) => ({ entry: entries[x.movie.id] || { movie: x.movie, ratings: {} }, sim: x.sim }))
+    : [
+      ...Object.values(entries).map((entry) => ({ entry })),
+      // Discoveries: only movies none of the people present have any answer for.
+      ...discoveries
+        .filter((d) => !presentIds.some((id) => entries[d.movie.id]?.ratings?.[id]))
+        .map((d) => ({ entry: { movie: entries[d.movie.id]?.movie || d.movie, ratings: entries[d.movie.id]?.ratings || {} }, sim: d.sim, because: d.because, fresh: true })),
+    ];
 
   const out = [];
-  for (const entry of candidates) {
+  for (const { entry, sim = simById.get(String(entry.movie.id))?.sim || 0, because, fresh } of candidates) {
     const parts = presentIds.map((id) => ({ id, ...memberScore(entry.ratings?.[id], profiles[id], entry.movie) }));
     if (parts.some((p) => p.kind === 'veto')) continue;
     const wanting = parts.filter((p) => p.kind === 'want' || p.kind === 'again');
-    if (!seeded && !wanting.length) continue;
+    if (!seeded && !fresh && !wanting.length) continue;
     if (seeded && parts.every((p) => p.kind === 'seen')) continue;
 
     const scores = parts.map((p) => p.score);
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
     let raw = avg * 0.7 + Math.min(...scores) * 0.3;
-
-    const sim = simById.get(String(entry.movie.id))?.sim || 0;
     if (seeded) raw = raw * 0.65 + sim * 100 * 0.35;
+    else if (fresh) raw = raw * 0.75 + sim * 100 * 0.25;
 
     const vibes = priorityGenres.filter((g) => (entry.movie.genres || []).includes(g));
     if (vibes.length) raw += Math.min(25, 15 + 5 * (vibes.length - 1));
 
     out.push({
       ...entry,
+      lane: fresh ? 'new' : 'wanted',
+      because: because || null,
       rank: raw, // unclamped, so boosted movies still sort among themselves
       score: Math.max(0, Math.min(100, Math.round(raw))),
       parts,

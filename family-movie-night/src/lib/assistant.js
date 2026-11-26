@@ -21,6 +21,8 @@ export function buildContext(entries, members, presentIds, shortlist) {
     const taste = tasteProfile(entries, m.id);
     return {
       name: m.name,
+      allTimeFavourites: (m.favorites || []).map(label),
+      likedDirectorsAndWriters: taste.people.slice(0, 5).map((p) => p.name),
       favouriteGenres: taste.genres.filter((g) => g.n >= 2).slice(0, 5).map((g) => g.name),
       loves: liked.slice(0, 25).map((e) => label(e.movie)),
       wouldRewatch: mine.filter((e) => e.ratings[m.id].status === 'again').slice(0, 15).map((e) => label(e.movie)),

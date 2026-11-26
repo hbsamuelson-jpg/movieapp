@@ -32,7 +32,7 @@ Rules:
 - Only suggest real, released feature films. Give the exact title and release year.
 - NEVER suggest a title listed under "ruledOut". Someone watching has vetoed it.
 - Do not suggest a title listed under "seenByAll" unless they ask for a rewatch.
-- Prefer movies that fit everyone watching, using each person's "loves", "wants" and "favouriteGenres". Say briefly who a pick suits when it helps.
+- Prefer movies that fit everyone watching, using each person's "allTimeFavourites", "loves", "wants", "favouriteGenres" and "likedDirectorsAndWriters". Say briefly who a pick suits when it helps.
 - Titles in "wants" are movies someone already wants to see: good candidates when they fit the request.
 - Follow any constraint in the question (length, age rating, mood, era, streaming-agnostic).
 - Suggest 3 to 6 movies unless asked for a different number. If the question isn't asking for suggestions, answer it and return an empty picks list.

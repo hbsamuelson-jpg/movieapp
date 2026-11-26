@@ -147,16 +147,20 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 ### Tabs
 
 - **Ask** — the AI assistant (see above). Shares the who's-watching selection with Tonight.
-- **Tonight** — pick who's watching and see suggestions ranked for exactly those people. Two ways to steer it:
+- **Tonight** — pick who's watching. The list holds only two kinds of movie, ranked for exactly those people:
+  - **Wanted:** movies someone watching marked Want to or Watch again. These come first.
+  - **New to us:** movies nobody watching has seen that fit the group's interests: similar to their favourites and most-loved movies, or by a director or writer they keep liking. Each says why it's there ("like Knives Out", "directed by Hayao Miyazaki").
+
+  Two ways to steer it:
   - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
-  - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, ranked for the people present, with everyone's vetoes still applied.
+  - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, with everyone's vetoes still applied.
 
   Put movies on the shared shortlist with **+**, then choose together or **Spin**. Filters (MPAA rating, genre, runtime) are behind the Filters button.
 - **Rate** — two modes, switched at the top:
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
   - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
 - **Search** — find one specific movie.
-- **Mine** — your ratings, plus a summary of your taste by category.
+- **Mine** — your profile: up to ten **all-time favourites**, a summary of your taste by category, the directors and writers you keep liking, and everything you've rated.
 
 ### Ratings
 
@@ -172,12 +176,18 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 
 **Taste.** For each person the app averages their stars per category, pulled toward their overall average until a category has a few ratings. For a movie they haven't rated it predicts their stars from those category scores, blended with the TMDB audience score. The more they rate, the more weight their own taste gets (up to 70% after 30 ratings).
 
-**Suggestions for who's here.** A movie is suggested when:
+**Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
-1. nobody present ruled it out (a No thanks, or 1–2 stars without Watch again), and
-2. at least one person present marked it Want to or Watch again.
+**Directors and writers.** Movie details include the director(s) and up to two writers. For each person the app tracks who is behind the movies they rated 4 or higher; anyone who shows up twice (or once on an all-time favourite) becomes a "keeps liking" name. A movie by one of them gets half a star added to that person's predicted rating, and their other well-known movies are pulled into Tonight's new-to-us list. Movies rated before this existed get their credits filled in quietly in the background.
 
-Each present person then contributes a score out of 100: Want to 92, Watch again 20 per star, Don't care 55, watched without wanting a rewatch 10 per star, and for anyone who hasn't rated it, their predicted stars (discounted 15% for being a guess). The match % is 70% the group average plus 30% the least-keen person's score, so a pick everyone is fine with beats one that one person loves and another shrugs at.
+**What Tonight shows.** A movie makes the list only if nobody present ruled it out (a No thanks, or 1–2 stars without Watch again) and it is either:
+
+1. **wanted** — at least one person present marked it Want to or Watch again, or
+2. **new** — no one present has any answer for it, and it came from the discovery pool: movies similar to up to three favourites or top-rated movies per person, plus other movies by their liked directors and writers.
+
+Movies people have simply watched no longer appear.
+
+Each present person then contributes a score out of 100: Want to 92, Watch again 20 per star, Don't care 55, watched without wanting a rewatch 10 per star, and for anyone who hasn't rated it, their predicted stars (discounted 15% for being a guess). The match % is 70% the group average plus 30% the least-keen person's score, so a pick everyone is fine with beats one that one person loves and another shrugs at. New movies are scored 75% on that group score and 25% on how closely they match the group's interests, and always sit below the wanted ones.
 
 People who aren't watching tonight don't count, including their vetoes.
 
@@ -196,7 +206,8 @@ People who aren't watching tonight don't count, including their vetoes.
 ```
 groups/family                         ← the one shared space for this site
   members: {
-    "k3x9q2ab": { name: "Couper", joinedAt: timestamp, uid: "<Google uid>" },  // uid only if linked
+    "k3x9q2ab": { name: "Couper", joinedAt: timestamp, uid: "<Google uid>",   // uid only if linked
+                  favorites: [ { …movie }, … ] },                              // all-time favourites
     "p7m1zz0c": { name: "Henry",  joinedAt: timestamp }
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
@@ -213,12 +224,14 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     genres: ["Adventure", "Comedy", "Sci-Fi"],
     vote: 8.3,                        // TMDB audience score, 0–10
     overview: "…",
+    crew: [ { id: 1, name: "Robert Zemeckis", role: "director" }, … ],  // director(s) + up to 2 writers
     detailed: true                    // runtime + cert have been fetched
   }
   ratings: {
     "k3x9q2ab": { status: "again",  stars: 5    },
     "p7m1zz0c": { status: "unseen", stars: null }   // a missing id = hasn't rated it
     // from Rank 5:  { status: "seen", stars: null, like: 4.5, via: "rank", place: 2, of: 5 }
+    // a favourite:  { status: "seen", stars: null, like: 5, via: "favorite" }
     //   (like = hidden taste signal, never shown as stars)
     // status is one of: seen | again | unseen | meh | pass
   }
@@ -241,6 +254,7 @@ src/
     store.js                on-device store and shared store, same interface
     tmdb.js                 top-of-year decks, eras, similar movies, varied picks, search, details
     suggest.js              taste profiles and suggestions (pure functions)
+    discover.js             finds unwatched movies that fit the group (favourites, loved movies, liked crew)
     assistant.js            summarises the group for the AI, resolves and vets its picks
     autoUpdate.js           checks for a newer build and reloads into it
     demoData.js             the built-in movie list (no ratings)
@@ -250,7 +264,8 @@ src/
     Ask.jsx                 the assistant chat
     Rank.jsx                Rank 5: kick the unseen, order the rest, submit
     Browse.jsx              search
-    Mine.jsx                your ratings and taste summary
+    Mine.jsx                your favourites, taste summary and ratings
+    MoviePicker.jsx         type-a-title movie picker used for favourites and Movies like…
     RateSheet.jsx           movie details and rating sheet
     Group.jsx               names, switch person, settings
     ui.jsx                  posters, stars, status stubs, avatars, rows

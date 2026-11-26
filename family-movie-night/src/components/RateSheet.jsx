@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
 import { shownStars } from '../lib/suggest.js';
 import { enrich } from '../lib/tmdb.js';
-import { Avatar, CertBadge, formatRuntime, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
+import { Avatar, CertBadge, directedBy, formatRuntime, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
 export default function RateSheet({ movie: initial, entry, members, me, listed, onToggleListed, onSave, onClose }) {
@@ -48,6 +48,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
               {movie.runtime && <span className="tabular-nums">{formatRuntime(movie.runtime)}</span>}
               {movie.genres?.length > 0 && <span>{movie.genres.slice(0, 3).join(', ')}</span>}
             </div>
+            {directedBy(movie) && <div className="text-xs text-dim">{directedBy(movie)}</div>}
             <p className="line-clamp-4 text-sm leading-snug text-cream/75">{movie.overview || 'No synopsis available.'}</p>
           </div>
         </div>

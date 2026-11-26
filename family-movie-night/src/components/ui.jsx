@@ -104,8 +104,8 @@ export function StatusStub({ rating }) {
           <Star size={11} fill="currentColor" strokeWidth={0} />
           {starText(rating.stars)}
         </span>
-      ) : rating.via === 'rank' ? (
-        <span className="perf py-1 pl-2 pr-3 normal-case tracking-normal">ranked</span>
+      ) : rating.via ? (
+        <span className="perf py-1 pl-2 pr-3 normal-case tracking-normal">{rating.via === 'favorite' ? 'favourite' : 'ranked'}</span>
       ) : (
         <span className="pr-1" />
       )}
@@ -117,6 +117,12 @@ export function CertBadge({ cert }) {
   if (!cert) return null;
   return <span className="shrink-0 rounded border border-dim/70 px-1.5 py-px text-[10px] font-bold leading-4 tracking-wide text-dim">{cert}</span>;
 }
+
+/** "Directed by X" when the movie's details include its crew. */
+export const directedBy = (movie) => {
+  const names = (movie.crew || []).filter((c) => c.role === 'director').map((c) => c.name);
+  return names.length ? `Directed by ${names.join(' & ')}` : null;
+};
 
 export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m` : null);
 

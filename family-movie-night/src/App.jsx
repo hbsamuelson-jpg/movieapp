@@ -42,6 +42,17 @@ export default function App() {
   useEffect(() => (hasFirebase ? watchSession(setSession, (e) => setProblem(explain(e))) : undefined), []);
   useEffect(() => (ready ? store.subscribe(setData, (e) => setProblem(explain(e))) : undefined), [ready]);
 
+  // Movies rated before directors and writers were tracked: fill those in quietly, a few at a time.
+  const backfilled = useRef(new Set());
+  useEffect(() => {
+    if (!data) return;
+    const missing = Object.values(data.entries).filter((e) => !e.movie.crew && !backfilled.current.has(String(e.movie.id))).slice(0, 12);
+    missing.forEach((e) => {
+      backfilled.current.add(String(e.movie.id));
+      enrich(e.movie).then((full) => full.crew && store.updateMovie(full));
+    });
+  }, [data]);
+
   const choose = (id) => { setPicked(id); pref.set('me', id); setShowGroup(false); };
   const googleUid = session && !session.isAnonymous ? session.uid : null;
   const members = data?.members || [];
@@ -72,7 +83,7 @@ export default function App() {
   const rate = useCallback((movie, rating) => {
     store.setRating(movie, me, rating);
     // List results don't carry runtime or MPAA rating; fetch them once so filters and taste work.
-    if (rating && !movie.detailed) enrich(movie).then((full) => full.detailed && store.updateMovie(full));
+    if (rating && !(movie.detailed && movie.crew)) enrich(movie).then((full) => full.crew && store.updateMovie(full));
   }, [me]);
 
   /* ----- Gate screens ----- */
@@ -98,6 +109,21 @@ export default function App() {
   const present = members.filter((m) => !away.includes(m.id));
   // At least one person always stays in.
   const toggleAway = (id) => setAway((a) => (a.includes(id) ? a.filter((x) => x !== id) : present.length > 1 ? [...a, id] : a));
+  // All-time favourites: stored on the person, and recorded as watched-and-loved so the taste
+  // profile and suggestions pick them up. Adding one never overwrites a rating you gave yourself.
+  const favorites = myself.favorites || [];
+  const addFavorite = async (picked) => {
+    if (favorites.some((m) => String(m.id) === String(picked.id))) return;
+    const movie = await enrich(entries[picked.id]?.movie || picked);
+    store.setFavorites(me, [...favorites, movie]);
+    const mine = entries[movie.id]?.ratings?.[me];
+    if (!mine || mine.status === 'unseen' || mine.status === 'meh') store.setRating(movie, me, { status: 'seen', stars: null, like: 5, via: 'favorite' });
+    else if (entries[movie.id] && !entries[movie.id].movie.crew && movie.crew) store.updateMovie(movie);
+  };
+  const removeFavorite = (movie) => {
+    store.setFavorites(me, favorites.filter((m) => String(m.id) !== String(movie.id)));
+    if (entries[movie.id]?.ratings?.[me]?.via === 'favorite') store.setRating(movie, me, null);
+  };
   const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
   const toggleListed = (movie) => store.setShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
   const go = (id) => { setTab(id); setShowGroup(false); };
@@ -147,7 +173,7 @@ export default function App() {
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
-          {tab === 'mine' && <Mine entries={entries} me={me} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'mine' && <Mine entries={entries} me={me} favorites={favorites} onAddFavorite={addFavorite} onRemoveFavorite={removeFavorite} onOpen={setOpen} onRate={() => go('rate')} />}
         </>
       )}
 

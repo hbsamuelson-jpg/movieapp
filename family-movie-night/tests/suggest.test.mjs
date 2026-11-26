@@ -88,4 +88,31 @@ assert.equal(learned.genres[0].name, 'Horror');
 // Flagged "never again" in a ranking still rules the movie out; plain last place does not.
 const flaggedEntry = { 1: { movie: movie(1, 'Flagged', ['Horror']), ratings: { z: { ...ranked, like: 1.5 }, y: want } }, 2: { movie: movie(2, 'Last', ['Horror']), ratings: { z: { ...ranked, like: 2.5 }, y: want } } };
 assert.deepEqual(suggest(flaggedEntry, ['z', 'y']).map((e) => e.movie.title), ['Last']);
+
+// Favourites count double and have no stars; directors and writers of loved movies are learned.
+const fav = { status: 'seen', stars: null, like: 5, via: 'favorite' };
+assert.equal(shownStars(fav), null);
+const nolan = { id: 7, name: 'Dana Director', role: 'director' };
+const crewEntries = {
+  1: { movie: { ...movie(1, 'Fav', ['Drama']), crew: [nolan] }, ratings: { d: fav } },
+  2: { movie: movie(2, 'Other', ['Drama']), ratings: { d: seen(3) } },
+};
+const dp = tasteProfile(crewEntries, 'd');
+assert.equal(dp.count, 3, 'a favourite counts as two');
+assert.deepEqual(dp.people.map((p) => p.name), ['Dana Director'], 'one favourite is enough to learn its director');
+const sameDirector = { ...movie(3, 'New One', ['Drama']), crew: [nolan] };
+assert.ok(predictStars(dp, sameDirector) > predictStars(dp, movie(4, 'Stranger', ['Drama'])), 'liked director lifts the prediction');
+
+// Tonight: wanted movies, plus discoveries nobody present has watched. Nothing else.
+const tonight = suggest(entries, ['a', 'b', 'c'], { discoveries: [
+  { movie: movie(70, 'Brand New', ['Adventure'], 8), sim: 0.9, because: 'like Everyone Wants' },
+  { movie: movie(9, 'Nobody Asked', ['Drama'], 9), sim: 1, because: 'x' }, // a has watched it: not a discovery
+  { movie: movie(8, 'Vetoed', ['Adventure'], 9), sim: 1, because: 'x' },   // c said No thanks
+] });
+const lanes = Object.fromEntries(tonight.map((e) => [e.movie.title, e.lane]));
+assert.equal(lanes['Brand New'], 'new');
+assert.equal(lanes['Everyone Wants'], 'wanted');
+assert.ok(!('Nobody Asked' in lanes) && !('Vetoed' in lanes));
+assert.ok(tonight.every((e) => e.lane === 'new' || e.wanting > 0), 'every row is wanted by someone or new to everyone');
+assert.equal(tonight.find((e) => e.lane === 'new').because, 'like Everyone Wants');
 console.log('\nAll suggestion checks passed.');

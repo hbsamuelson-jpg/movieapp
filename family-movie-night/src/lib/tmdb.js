@@ -196,13 +196,36 @@ export async function searchMovies(query) {
 
 /** Fill in runtime, MPAA rating and full genres. Returns the movie unchanged in demo mode or on failure. */
 export async function enrich(movie) {
-  if (!hasTmdb || movie.detailed) return movie;
+  if (!hasTmdb || (movie.detailed && movie.crew)) return movie;
   try {
-    const raw = await get(`/movie/${movie.id}`, { append_to_response: 'release_dates', language: 'en-US' });
+    const raw = await get(`/movie/${movie.id}`, { append_to_response: 'release_dates,credits', language: 'en-US' });
     const us = raw.release_dates?.results?.find((r) => r.iso_3166_1 === 'US');
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
-    return { ...normalize(raw), cert, runtime: raw.runtime || null, detailed: true };
+    return { ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []), detailed: true };
   } catch {
     return movie;
   }
+}
+
+const WRITING_JOBS = ['Screenplay', 'Writer', 'Story'];
+/** The director(s) and up to two writers: [{ id, name, role: 'director' | 'writer' }]. */
+function keyCrew(crew) {
+  const directors = crew.filter((c) => c.job === 'Director').slice(0, 2).map((c) => ({ id: c.id, name: c.name, role: 'director' }));
+  const writers = crew.filter((c) => WRITING_JOBS.includes(c.job) && !directors.some((d) => d.id === c.id))
+    .filter((c, n, all) => all.findIndex((x) => x.id === c.id) === n)
+    .slice(0, 2).map((c) => ({ id: c.id, name: c.name, role: 'writer' }));
+  return [...directors, ...writers];
+}
+
+/** Well-known movies a person actually directed (or wrote, for a writer), most-watched first. */
+export async function byPerson(person) {
+  if (!hasTmdb) return [];
+  const data = await get(`/person/${person.id}/movie_credits`, { language: 'en-US' });
+  const jobs = person.role === 'director' ? ['Director'] : WRITING_JOBS;
+  const seen = new Set();
+  return (data.crew || [])
+    .filter((raw) => jobs.includes(raw.job) && raw.vote_count >= 200 && !seen.has(raw.id) && seen.add(raw.id))
+    .sort((a, b) => b.vote_count - a.vote_count)
+    .slice(0, 12)
+    .map(normalize);
 }

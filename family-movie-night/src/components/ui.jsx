@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bookmark, ExternalLink, Eye, Meh, Play, Repeat, Star, ThumbsDown, Users } from 'lucide-react';
+import { Bookmark, ExternalLink, Eye, EyeOff, Meh, Play, Repeat, Star, ThumbsDown, Users } from 'lucide-react';
 import { quality, shownStars } from '../lib/suggest.js';
 import { posterUrl } from '../lib/tmdb.js';
 
@@ -85,13 +85,14 @@ export const STATUS = {
   unseen: { label: 'Want to', icon: Bookmark, cls: 'bg-cream text-house', glyph: '+' },
   meh: { label: "Don't care", icon: Meh, cls: 'bg-aisle text-dim', glyph: '~' },
   pass: { label: 'No thanks', icon: ThumbsDown, cls: 'bg-velvet/30 text-cream', glyph: '×' },
+  notseen: { label: "Haven't seen", icon: EyeOff, cls: 'bg-aisle text-dim', glyph: '?' },
 };
 export const NOT_WATCHED = ['unseen', 'meh', 'pass'];
 const starText = (stars) => (stars % 1 ? stars.toFixed(1) : stars);
 
 export function StatusStub({ rating }) {
   if (!rating) return null;
-  const s = STATUS[rating.status];
+  const s = STATUS[rating.status] || STATUS.seen;
   const Icon = s.icon;
   return (
     <span className={`stub inline-flex shrink-0 items-center text-[11px] font-bold uppercase tracking-wide ${s.cls}`}>

@@ -127,7 +127,7 @@ export default function App() {
     const movie = await enrich(entries[picked.id]?.movie || picked);
     store.setFavorites(me, [...favorites, movie]);
     const mine = entries[movie.id]?.ratings?.[me];
-    if (!mine || mine.status === 'unseen' || mine.status === 'meh') store.setRating(movie, me, { status: 'seen', stars: null, like: 5, via: 'favorite' });
+    if (!mine || mine.status === 'unseen' || mine.status === 'meh' || mine.status === 'notseen') store.setRating(movie, me, { status: 'seen', stars: null, like: 5, via: 'favorite' });
     else if (entries[movie.id] && needsDetails(entries[movie.id].movie)) store.updateMovie(movie);
   };
   const removeFavorite = (movie) => {

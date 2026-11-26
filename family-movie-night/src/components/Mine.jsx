@@ -5,7 +5,7 @@ import ForYou from './ForYou.jsx';
 import MoviePicker from './MoviePicker.jsx';
 import { Chip, MovieRow, Poster, StatusStub } from './ui.jsx';
 
-const TABS = [['all', 'All'], ['unseen', 'Want to'], ['seen', 'Watched'], ['again', 'Watch again'], ['meh', "Don't care"], ['pass', 'No thanks']];
+const TABS = [['all', 'All'], ['unseen', 'Want to'], ['seen', 'Watched'], ['again', 'Watch again'], ['meh', "Don't care"], ['pass', 'No thanks'], ['notseen', "Haven't seen"]];
 const TASTE_MIN = 8; // watched movies needed before the taste summary means anything
 const MAX_FAVORITES = 10;
 

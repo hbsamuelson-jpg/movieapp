@@ -3,6 +3,7 @@
 // An entry is { movie, ratings: { [memberId]: { status, stars } } }
 //   watched:      'seen'   (stars required)   'again' (stars required, would rewatch)
 //   not watched:  'unseen' (want to)          'meh'   (don't care)         'pass' (no thanks)
+//                 'notseen' (haven't seen it, no opinion given: remembered so it isn't asked again in Rank 5)
 //   from Rank 5:  { status: 'seen', stars: null, like, via: 'rank', place, of }
 //                 `like` is a hidden 0–5 taste signal. It is never shown as a star rating.
 //   a favourite:  { status: 'seen', stars: null, like: 5, via: 'favorite' }  (counts double)
@@ -111,7 +112,8 @@ const ALREADY_SEEN_PENALTY = 30;
 
 /** One person's enthusiasm for one movie, 0–100, or a veto. */
 function memberScore(rating, profile, movie) {
-  if (!rating) return { kind: 'guess', score: predictStars(profile, movie) * 20 * 0.85 };
+  // "Haven't seen it" says nothing about wanting it, so it's scored like no answer at all.
+  if (!rating || rating.status === 'notseen') return { kind: 'guess', score: predictStars(profile, movie) * 20 * 0.85 };
   if (rating.status === 'pass') return { kind: 'veto' };
   if (rating.status === 'unseen') return { kind: 'want', score: 92 };
   if (rating.status === 'meh') return { kind: 'meh', score: 55 };
@@ -302,7 +304,7 @@ export function forYou(entries, memberId, discoveries = [], members = []) {
     pool.set(key, prev ? { ...prev, movie: e.movie, sim: Math.min(1, prev.sim + 0.15) } : { movie: e.movie, sim: 0.6, because: text });
   }
   const ranked = [...pool.values()]
-    .filter((x) => !entries[x.movie.id]?.ratings?.[memberId])
+    .filter((x) => { const r = entries[x.movie.id]?.ratings?.[memberId]; return !r || r.status === 'notseen'; })
     .map((x) => ({
       movie: x.movie,
       because: x.because,

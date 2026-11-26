@@ -251,4 +251,14 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   assert.equal(suggest({ 604: { movie: soonMovie, ratings: { x: want } } }, ['x']).length, 0);
   assert.equal(suggest({ 604: { movie: { ...soonMovie, release: '2020-01-01' }, ratings: { x: want } } }, ['x']).length, 1);
 }
+
+// "Haven't seen it" is remembered but counts as no opinion: no veto, no want, no "already seen" penalty.
+{
+  const M = movie(501, 'Unseen', ['Comedy']);
+  const base = suggest({ 501: { movie: M, ratings: { a: want } } }, ['a', 'b'])[0];
+  const withNote = suggest({ 501: { movie: M, ratings: { a: want, b: { status: 'notseen', stars: null } } } }, ['a', 'b'])[0];
+  assert.equal(withNote.rank, base.rank);
+  assert.equal(withNote.alreadySeen, 0);
+  assert.equal(forYou({ 501: { movie: M, ratings: { me: { status: 'notseen', stars: null } } } }, 'me', [{ movie: M, sim: 0.9, because: 'x' }], []).length, 1);
+}
 console.log('\nAll suggestion checks passed.');

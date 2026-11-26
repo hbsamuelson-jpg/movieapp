@@ -68,7 +68,7 @@ function QuickSwipe({ entries, me, onRate }) {
   };
   useEffect(load, [year, perYear, genreKey, inRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const todo = (movies || []).filter((m) => !handled.has(String(m.id)) && !entries[m.id]?.ratings?.[me]);
+  const todo = (movies || []).filter((m) => !handled.has(String(m.id)) && (!entries[m.id]?.ratings?.[me] || entries[m.id].ratings[me].status === 'notseen')); // "haven't seen" still gets the want-to question
   const next = finished ? null : todo[0];
 
   // Fetch the review score, rating and director for the card in front of you (and the one after).

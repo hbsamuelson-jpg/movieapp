@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Check, EyeOff, ThumbsDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, EyeOff, GripVertical, ThumbsDown } from 'lucide-react';
 import { rankToLiking } from '../lib/suggest.js';
 import { diversePick, enrich } from '../lib/tmdb.js';
 import { Notice, Poster, ScoreBadge } from './ui.jsx';
@@ -8,8 +8,9 @@ const BATCH = 5;
 
 /**
  * Rank 5. Five well-known movies from very different genres and decades.
- *   1. Kick out any you haven't seen; each is swapped for a fresh one.
- *   2. Order what's left from best to worst with the arrows.
+ *   1. Kick out any you haven't seen; each is swapped for a fresh one, and remembered as
+ *      "haven't seen" so it is never dealt to you again.
+ *   2. Order what's left from best to worst: drag a row by its poster, or use the arrows.
  *   3. Submit. The order teaches the app what you like. No star ratings are given: each movie
  *      is saved as "watched" with a hidden taste signal, stronger the higher you ranked it.
  * Last place is not a veto. Tap "Never again" on a movie to rule it out.
@@ -61,6 +62,9 @@ export default function Rank({ entries, me, onRate }) {
   useEffect(() => { deal(); return () => { live.current += 1; }; }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const kick = (key) => {
+    const gone = slotsRef.current.find((s) => s.key === key)?.movie;
+    // Remembered for good, unless they've already said something about it (e.g. "want to").
+    if (gone && !entries[gone.id]?.ratings?.[me]) onRate(gone, { status: 'notseen', stars: null });
     update((list) => list.map((s) => (s.key === key ? { key, loading: true } : s)));
     fill(key, live.current);
   };
@@ -71,6 +75,19 @@ export default function Rank({ entries, me, onRate }) {
     [next[index], next[to]] = [next[to], next[index]];
     return next;
   });
+  // Dragging: grab a row by its poster and move it; the row follows the pointer one place at a time.
+  const listRef = useRef(null);
+  const [dragging, setDragging] = useState(null);
+  const startDrag = (e, key) => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); setDragging(key); };
+  const drag = (e) => {
+    if (!dragging || !listRef.current) return;
+    const rows = [...listRef.current.children];
+    const over = rows.findIndex((row) => { const r = row.getBoundingClientRect(); return e.clientY >= r.top && e.clientY <= r.bottom; });
+    const from = slotsRef.current.findIndex((s) => s.key === dragging);
+    if (over < 0 || from < 0 || over === from) return;
+    update((list) => { const next = [...list]; const [item] = next.splice(from, 1); next.splice(over, 0, item); return next; });
+  };
+  const endDrag = () => setDragging(null);
   const flag = (key) => update((list) => list.map((s) => (s.key === key ? { ...s, flagged: !s.flagged } : s)));
 
   const ranked = slots.filter((s) => s.movie);
@@ -104,22 +121,26 @@ export default function Rank({ entries, me, onRate }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-dim">Kick out anything you haven't seen. Then put the rest in order, best at the top, and submit.</p>
+      <p className="text-sm text-dim">Kick out anything you haven't seen (it won't be dealt to you again). Then put the rest in order, best at the top: drag a row by its poster, or use the arrows. Then submit.</p>
       {error && <Notice>{error}</Notice>}
 
-      <ol className="flex flex-col gap-2">
+      <ol ref={listRef} className="flex flex-col gap-2">
         {slots.map((slot) => {
           if (slot.loading) return <li key={slot.key} className="flex h-[96px] items-center justify-center rounded-xl bg-seat text-sm text-dim">Finding another…</li>;
           if (slot.empty) return <li key={slot.key} className="flex h-[96px] items-center justify-center rounded-xl border border-dashed border-aisle text-sm text-dim">Nothing left to offer here</li>;
           const place = ranked.indexOf(slot);
           const { movie } = slot;
           return (
-            <li key={slot.key} className={`card-in flex items-stretch gap-2 rounded-xl p-2 ${slot.flagged ? 'bg-velvet/20' : 'bg-seat'}`}>
+            <li key={slot.key} className={`card-in flex items-stretch gap-2 rounded-xl p-2 transition-shadow ${slot.flagged ? 'bg-velvet/20' : 'bg-seat'} ${dragging === slot.key ? 'relative z-10 shadow-xl shadow-black/60 ring-2 ring-gold' : ''}`}>
               <div className="flex flex-col justify-between">
                 <button type="button" onClick={() => move(slots.indexOf(slot), -1)} disabled={slots.indexOf(slot) === 0} aria-label={`Move ${movie.title} up`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-aisle text-cream disabled:opacity-30"><ArrowUp size={18} /></button>
                 <button type="button" onClick={() => move(slots.indexOf(slot), 1)} disabled={slots.indexOf(slot) === slots.length - 1} aria-label={`Move ${movie.title} down`} className="flex h-9 w-9 items-center justify-center rounded-lg bg-aisle text-cream disabled:opacity-30"><ArrowDown size={18} /></button>
               </div>
-              <div className="w-[51px] shrink-0 self-center"><Poster movie={movie} size="w92" className="rounded-sm" /></div>
+              <div role="button" tabIndex={-1} aria-label={`Drag ${movie.title} to reorder`} onPointerDown={(e) => startDrag(e, slot.key)} onPointerMove={drag} onPointerUp={endDrag} onPointerCancel={endDrag}
+                className={`relative w-[51px] shrink-0 touch-none select-none self-center ${dragging === slot.key ? 'cursor-grabbing' : 'cursor-grab'}`}>
+                <Poster movie={movie} size="w92" className="pointer-events-none rounded-sm" />
+                <span className="absolute -left-1 top-1/2 -translate-y-1/2 rounded bg-house/80 py-1 text-cream" aria-hidden="true"><GripVertical size={14} /></span>
+              </div>
               <div className="flex min-w-0 flex-1 flex-col justify-center">
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-lg leading-none text-gold">{place + 1}</span>

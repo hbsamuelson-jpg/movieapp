@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown, ExternalLink } from 'lucide-react';
+import { Bookmark, ExternalLink, Eye, Meh, Play, Repeat, Star, ThumbsDown, Users } from 'lucide-react';
 import { quality, shownStars } from '../lib/suggest.js';
 import { posterUrl } from '../lib/tmdb.js';
 
@@ -241,6 +241,15 @@ export const Notice = ({ children }) => <p className="rounded-lg border border-v
  * exact Rotten Tomatoes address, so this opens their search for the title, which lists it first.
  */
 export const rtUrl = (movie) => `https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title || '')}`;
+/** Common Sense Media's age guidance. Their exact page address isn't knowable, so this opens their search for the title. */
+export const csmUrl = (movie) => `https://www.commonsensemedia.org/search/${encodeURIComponent(movie.title || '')}`;
+/** Two small links for any movie: its trailer and the parents' guide. */
+export const MovieLinks = ({ movie, trailer, className = '' }) => (
+  <span className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
+    <a href={trailer} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Play size={12} fill="currentColor" /> Trailer</a>
+    <a href={csmUrl(movie)} target="_blank" rel="noopener noreferrer" title="Age guidance on Common Sense Media" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Users size={12} /> Common Sense Media</a>
+  </span>
+);
 export const TitleLink = ({ movie }) => (
   <a href={rtUrl(movie)} target="_blank" rel="noopener noreferrer" title="Open on Rotten Tomatoes" className="underline decoration-aisle decoration-2 underline-offset-4 hover:decoration-gold">
     {movie.title}<ExternalLink size={13} className="ml-1.5 inline align-baseline text-dim" aria-hidden="true" />

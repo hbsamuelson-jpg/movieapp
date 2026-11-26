@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { hasTmdb, pref } from '../lib/config.js';
-import { enrich, ERAS, GENRE_CHOICES, topOfYear, yearsFor } from '../lib/tmdb.js';
+import { enrich, ERAS, GENRE_CHOICES, topOfYear, trailerUrl, yearsFor } from '../lib/tmdb.js';
 import Rank from './Rank.jsx';
-import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink, KeyHint, useStarKeys } from './ui.jsx';
+import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink, KeyHint, MovieLinks, useStarKeys } from './ui.jsx';
 
 const PER_YEAR = [5, 10, 20];
 // Arrow keys for the three "haven't watched it" answers, laid out like the buttons: left, middle, right.
@@ -170,6 +170,7 @@ function QuickSwipe({ entries, me, onRate }) {
               <span className="tabular-nums">#{position} of {movies.length}</span>
             </div>
             <div className="text-xs text-dim">{[movie.genres?.slice(0, 3).join(' · '), directedBy(movie)].filter(Boolean).join(' · ')}</div>
+            <MovieLinks movie={movie} trailer={trailerUrl(movie)} className="mt-1.5 justify-center" />
           </div>
 
           <div className="flex w-full flex-col items-center gap-3 rounded-xl bg-seat p-4">

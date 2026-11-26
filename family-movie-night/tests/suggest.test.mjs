@@ -1,6 +1,6 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { familyStats, unscoredNights } from '../src/lib/stats.js';
+import { familyStats, monthReview, unscoredNights } from '../src/lib/stats.js';
 import { voteResult, liking, quality, qualityNudge, shownStars, forYou, activeSnoozes, applyFilters, streaming, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
@@ -229,5 +229,26 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   assert.deepEqual(unscoredNights(hist, es, 'z', 5000 + 3 * 3600e3).map((n) => n.id), ['n2']);
   assert.deepEqual(unscoredNights(hist, es, 'z', 5000 + 60e3), []);
   assert.deepEqual(unscoredNights(hist, es, 'x', 1e12), []);
+}
+
+// Month in review counts only that month's nights; unreleased wanted movies stay off Tonight.
+{
+  const A = { ...movie(601, 'A', ['Comedy']), runtime: 100 }, B = { ...movie(602, 'B', ['Comedy']), runtime: 90 }, C = movie(603, 'C', ['Drama']);
+  const people = [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }];
+  const es = { 601: { movie: A, ratings: { x: seen(5), y: seen(3) } }, 602: { movie: B, ratings: { x: seen(2), y: seen(2) } }, 603: { movie: C, ratings: {} } };
+  const at = (y, m, d) => new Date(y, m, d, 20).getTime();
+  const hist = [{ id: 'a', at: at(2026, 10, 3), movie: A, via: 'vote', watchers: ['x', 'y'] }, { id: 'b', at: at(2026, 10, 20), movie: B, via: 'spin', watchers: ['x', 'y'] }, { id: 'c', at: at(2026, 9, 30), movie: C, via: 'pick', watchers: ['x'] }];
+  const nov = monthReview(es, people, hist, 2026, 10);
+  assert.equal(nov.count, 2);
+  assert.equal(nov.minutes, 190);
+  assert.equal(nov.best.movie.id, 601);
+  assert.equal(nov.worst.movie.id, 602);
+  assert.equal(nov.split.movie.id, 601);
+  assert.equal(nov.topGenre, 'Comedy');
+  assert.equal(monthReview(es, people, hist, 2026, 9).unscored, 1);
+  assert.equal(monthReview(es, people, hist, 2026, 11).count, 0);
+  const soonMovie = { ...movie(604, 'NotOutYet', ['Comedy']), release: '2999-01-01' };
+  assert.equal(suggest({ 604: { movie: soonMovie, ratings: { x: want } } }, ['x']).length, 0);
+  assert.equal(suggest({ 604: { movie: { ...soonMovie, release: '2020-01-01' }, ratings: { x: want } } }, ['x']).length, 1);
 }
 console.log('\nAll suggestion checks passed.');

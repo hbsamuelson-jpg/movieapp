@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Check, Clock, Play, Plus, X } from 'lucide-react';
+import { Check, Clock, Plus, X } from 'lucide-react';
 import { shownStars } from '../lib/suggest.js';
 import { enrich, pricesUrl, trailerUrl } from '../lib/tmdb.js';
 
 const SNOOZE = 21 * 24 * 60 * 60 * 1000; // "not tonight" hides a movie for three weeks
 const day = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub, TitleLink, KeyHint, useStarKeys } from './ui.jsx';
+import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub, TitleLink, KeyHint, MovieLinks, useStarKeys } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
 export default function RateSheet({ movie: initial, entry, members, me, listed, snoozedUntil, onSnooze, onToggleListed, onWatched, onSave, onClose }) {
@@ -48,7 +48,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <ScoreBadge movie={movie} size="lg" />
-              <a href={trailerUrl(movie)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Play size={12} fill="currentColor" /> Trailer</a>
+              <MovieLinks movie={movie} trailer={trailerUrl(movie)} />
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-dim">
               {movie.year && <span className="tabular-nums">{movie.year}</span>}

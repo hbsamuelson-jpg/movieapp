@@ -176,6 +176,10 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 
   **Not tonight.** On any movie's page, **Not tonight** hides it from your suggestions for 3 weeks without ruling it out. It applies whenever you're one of the people watching. Hidden movies are listed at the bottom of Tonight with **Bring back**.
 
+  **Coming soon** (Search tab): movies opening in US theatres over the next five months, sorted by how well they fit your taste or by date. **Want to see** adds one to your Want to list; it stays off Tonight until its release date.
+
+  **Month in review** (top of Stats): for any month since your first logged movie night: how many nights and hours, the most-watched genre, how movies were chosen, movie of the month, biggest letdown (only if it averaged under 3), the movie that split the room, the full list with scores, and how many each person watched. It's built from the movie-night log, since individual ratings aren't dated.
+
   **Stats** (top right of Tonight): how many movie nights and how they were chosen, the best and worst night by score, how closely each pair of people agree (100% = identical stars; each star apart costs 25 points; needs 4 movies both rated), the movie that split you most, family favourites (average 4+), and each person's count, average and top genre. Only star ratings count.
 
   **Score reminder.** Two hours after a movie night is logged, anyone who watched and hasn't scored it sees "How was …?" at the top of Tonight and a dot on History and the Tonight tab. The ✕ dismisses that reminder on that device.
@@ -206,7 +210,7 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
-**Movie page extras.** **Trailer** opens the official trailer on YouTube (or a YouTube search when TMDB has none). **Where to watch** shows, for the US: **Free** (free services, usually with ads, or free with a library card such as Kanopy and Hoopla), **Included with** (subscription services), or the stores that rent or sell it. The data comes from JustWatch through TMDB, is refreshed every two weeks and can lag. It says which services carry a movie but not what they charge, so there are no prices in the app; **Compare rental prices** opens JustWatch, which lists them. Service names are shown as text. Add-on channels are folded into the service ("AMC+ Amazon Channel" counts as AMC+).
+**Movie page extras.** On a movie's page and on the Quick Swipe card: **Trailer** opens the official trailer on YouTube (or a YouTube search when TMDB has none), and **Common Sense Media** opens their search for the title, for age guidance. **Where to watch** shows, for the US: **Free** (free services, usually with ads, or free with a library card such as Kanopy and Hoopla), **Included with** (subscription services), or the stores that rent or sell it. The data comes from JustWatch through TMDB, is refreshed every two weeks and can lag. It says which services carry a movie but not what they charge, so there are no prices in the app; **Compare rental prices** opens JustWatch, which lists them. Service names are shown as text. Add-on channels are folded into the service ("AMC+ Amazon Channel" counts as AMC+).
 
 **Number keys.** On a computer, on the Quick Swipe card and on a movie's page: **1–5** sets that many stars, the **same key again** takes half a star off (4, 4 → 3½), **0** clears the stars. On Quick Swipe the arrow keys answer for movies you haven't watched: **←** Want to, **↓** Don't care, **→** No thanks (each saves and moves on; they're off once stars are set). **Delete** is undo: it takes back stars you just set, or with none set, goes back to the previous movie and removes its rating (same as the Undo button). **Enter** on Quick Swipe goes to the next movie: with 3 stars or more it saves the movie as "would watch again", with 2½ or fewer as plain watched, and with no stars it skips. On a movie's page, Enter saves what's selected. Keys are ignored while you're typing in a search box.
 
@@ -289,6 +293,7 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     crew: [ { id: 1, name: "Robert Zemeckis", role: "director" }, … ],  // director(s) + up to 2 writers
     imdb: "tt0088763",
     rt: null, mc: 88,                 // Rotten Tomatoes and Metacritic scores, 0–100 or null
+    release: "2017-11-22",            // release date; a wanted movie stays off Tonight until then
     scored: 2,                        // critic-score lookup done (version number)
     watch: { v: 2, at: 1795700000000,                       // US availability, and when it was checked
              on: [ { name: "Disney+" } ],                   // included with a subscription

@@ -1,21 +1,36 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Check, Plus, Search, X } from 'lucide-react';
 import { hasTmdb } from '../lib/config.js';
-import { filmography, searchMovies, searchPeople } from '../lib/tmdb.js';
+import { comingSoon, filmography, searchMovies, searchPeople } from '../lib/tmdb.js';
+import { predictStars, tasteProfile } from '../lib/suggest.js';
 import { MemberDots, MovieRow, Notice } from './ui.jsx';
 
-const MODES = [['movies', 'Movies'], ['people', 'Directors']];
+const MODES = [['movies', 'Movies'], ['people', 'Directors'], ['soon', 'Coming soon']];
+const opens = (date) => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 /** Find one specific movie, or look up a director (or writer) and browse what they made. */
-export default function Browse({ entries, members, onOpen }) {
+export default function Browse({ entries, members, me, onWant, onOpen }) {
   const [mode, setMode] = useState('movies');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [state, setState] = useState('idle'); // idle | loading | ready | error
   const [error, setError] = useState('');
+  const [soon, setSoon] = useState({ state: 'idle', list: [] }); // movies opening in theatres soon
+  const [soonSort, setSoonSort] = useState('fit'); // fit | date
   const [person, setPerson] = useState(null); // the chosen director, with { directed, written } once loaded
 
   useEffect(() => {
+    if (mode !== 'soon' || soon.state !== 'idle') return;
+    setSoon({ state: 'loading', list: [] });
+    comingSoon().then((list) => setSoon({ state: 'ready', list })).catch((e) => setSoon({ state: 'error', list: [], error: e.message }));
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const taste = useMemo(() => tasteProfile(entries, me), [entries, me]);
+  const upcoming = useMemo(() => soon.list
+    .map((movie) => ({ movie, fit: Math.round(predictStars(taste, movie) * 20) }))
+    .sort((a, b) => (soonSort === 'date' ? a.movie.release.localeCompare(b.movie.release) : b.fit - a.fit))) // ties keep TMDB's order: most anticipated first, [soon.list, taste, soonSort]);
+
+  useEffect(() => {
+    if (mode === 'soon') return undefined;
     const q = query.trim();
     if (!q) { setState('idle'); setResults([]); return undefined; }
     let live = true;
@@ -71,12 +86,39 @@ export default function Browse({ entries, members, onOpen }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-1 rounded-full bg-seat p-1" role="tablist" aria-label="Search for">
+      <div className="grid grid-cols-3 gap-1 rounded-full bg-seat p-1" role="tablist" aria-label="Search for">
         {MODES.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => switchMode(id)} className={`rounded-full py-2 text-sm font-bold transition ${mode === id ? 'bg-gold text-house' : 'text-dim hover:text-cream'}`}>{label}</button>
         ))}
       </div>
 
+      {mode === 'soon' && (
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <p className="text-sm text-dim">Opening in US theatres over the next five months. Tap <span className="font-bold text-cream">Want to see</span> and it joins your Want to list, then shows up on Tonight once it's out.</p>
+            <div className="flex gap-2" role="group" aria-label="Sort by">
+              {[['fit', 'Best fit for me'], ['date', 'Soonest']].map(([key, label]) => <button key={key} type="button" aria-pressed={soonSort === key} onClick={() => setSoonSort(key)} className={`rounded-full border px-3 py-1.5 text-sm font-bold ${soonSort === key ? 'border-gold bg-gold text-house' : 'border-aisle text-cream'}`}>{label}</button>)}
+            </div>
+          </div>
+          {!hasTmdb && <Notice>Coming soon needs the TMDB key.</Notice>}
+          {soon.state === 'loading' && <p className="py-10 text-center text-sm text-dim">Finding what's coming…</p>}
+          {soon.state === 'error' && <Notice>{soon.error}</Notice>}
+          {soon.state === 'ready' && hasTmdb && upcoming.length === 0 && <p className="py-10 text-center text-sm text-dim">Nothing announced yet.</p>}
+          <ol className="-mx-2 flex flex-col divide-y divide-aisle/60 lg:grid lg:grid-cols-2 lg:gap-x-8 lg:divide-y-0">
+            {upcoming.map(({ movie, fit }) => {
+              const mine = entries[movie.id]?.ratings?.[me];
+              const wanted = mine?.status === 'unseen';
+              return (
+                <MovieRow key={movie.id} movie={entries[movie.id]?.movie || movie} onOpen={onOpen}
+                  note={<span><span className="font-bold text-gold">Opens {opens(movie.release)}</span>{taste.genres.length ? ` · ${fit}% your kind of movie` : ''}</span>}
+                  action={<button type="button" onClick={() => onWant(movie, !wanted)} aria-pressed={wanted} className={`mr-1 inline-flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold ${wanted ? 'border-gold bg-gold text-house' : 'border-aisle text-cream'}`}>{wanted ? <><Check size={13} /> Wanted</> : <><Plus size={13} /> Want to see</>}</button>} />
+              );
+            })}
+          </ol>
+        </section>
+      )}
+
+      {mode !== 'soon' && <>
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-dim" />
         <input id="movie-search" type="search" autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={mode === 'people' ? 'Search a director or writer' : hasTmdb ? 'Search any movie' : 'Search 150 built-in movies'} aria-label={mode === 'people' ? 'Search directors and writers' : 'Search movies'} className="w-full rounded-full border border-aisle bg-seat py-3 pl-11 pr-10 text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
@@ -106,6 +148,7 @@ export default function Browse({ entries, members, onOpen }) {
           ))}
         </ul>
       )}
+      </>}
     </div>
   );
 }

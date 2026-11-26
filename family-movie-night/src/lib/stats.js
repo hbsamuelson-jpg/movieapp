@@ -63,3 +63,45 @@ export function unscoredNights(history, entries, memberId, now = Date.now(), wai
     .filter((n) => (n.watchers || []).includes(memberId) && now - n.at >= wait && !shownStars(entries[n.movie.id]?.ratings?.[memberId]))
     .sort((a, b) => b.at - a.at);
 }
+
+/**
+ * Month in review: what the family watched together in one calendar month, from the movie-night
+ * log. `month` is 0–11. Ratings carry no dates, so this covers movie nights only.
+ */
+export function monthReview(entries, members, history, year, month) {
+  const inMonth = history.filter((n) => { const d = new Date(n.at); return d.getFullYear() === year && d.getMonth() === month; }).sort((a, b) => a.at - b.at);
+  const nights = inMonth.map((night) => {
+    const movie = entries[night.movie.id]?.movie || night.movie;
+    const scores = (night.watchers || []).map((id) => ({ member: members.find((m) => m.id === id), stars: shownStars(entries[night.movie.id]?.ratings?.[id]) })).filter((s) => s.member && s.stars);
+    const values = scores.map((s) => s.stars);
+    return { night, movie, scores, average: values.length ? mean(values) : null, spread: values.length > 1 ? Math.max(...values) - Math.min(...values) : 0 };
+  });
+  const scored = nights.filter((n) => n.average != null).sort((a, b) => b.average - a.average);
+  const split = [...nights].sort((a, b) => b.spread - a.spread)[0];
+  const how = { vote: 0, spin: 0, pick: 0 };
+  inMonth.forEach((n) => { how[n.via] = (how[n.via] || 0) + 1; });
+  const genres = {};
+  nights.forEach((n) => (n.movie.genres || []).slice(0, 2).forEach((g) => { genres[g] = (genres[g] || 0) + 1; }));
+  const people = members
+    .map((m) => {
+      const mine = nights.filter((n) => (n.night.watchers || []).includes(m.id));
+      const given = mine.map((n) => n.scores.find((s) => s.member.id === m.id)?.stars).filter(Boolean);
+      return { member: m, watched: mine.length, average: given.length ? mean(given) : null };
+    })
+    .filter((p) => p.watched > 0)
+    .sort((a, b) => b.watched - a.watched);
+  return {
+    count: nights.length,
+    minutes: nights.reduce((sum, n) => sum + (n.movie.runtime || 0), 0),
+    nights,
+    how,
+    best: scored[0] || null,
+    worst: scored.length >= 2 ? scored[scored.length - 1] : null,
+    split: split && split.spread >= 1 ? split : null,
+    topGenre: Object.entries(genres).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+    people,
+    unscored: nights.filter((n) => n.average == null).length,
+  };
+}
+/** The first month with a movie night, as { year, month }, or null. */
+export const firstMonth = (history) => (history.length ? ((d) => ({ year: d.getFullYear(), month: d.getMonth() }))(new Date(Math.min(...history.map((n) => n.at)))) : null);

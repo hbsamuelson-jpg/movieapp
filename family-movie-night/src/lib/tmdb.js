@@ -31,6 +31,7 @@ function normalize(raw) {
     id: raw.id,
     title: raw.title,
     year: raw.release_date ? Number(raw.release_date.slice(0, 4)) : null,
+    release: raw.release_date || null, // YYYY-MM-DD; lets the app tell a movie isn't out yet
     poster: raw.poster_path || null,
     overview: raw.overview || '',
     vote: raw.vote_average ? Math.round(raw.vote_average * 10) / 10 : null,
@@ -85,6 +86,23 @@ export async function topOfYear({ year, perYear = 10, genres = [] }) {
   if (ids.length) params.with_genres = ids.join('|');
   const data = await get('/discover/movie', params); // one page = 20 movies
   return data.results.slice(0, perYear).map(normalize);
+}
+
+/**
+ * Movies opening in US theatres over the next five months, most anticipated first (cached for
+ * the session). Each has `release` (YYYY-MM-DD).
+ */
+let soonCache = null;
+export function comingSoon() {
+  if (!hasTmdb) return Promise.resolve([]);
+  if (!soonCache) {
+    const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+    const params = { include_adult: 'false', language: 'en-US', region: 'US', with_release_type: '2|3', sort_by: 'popularity.desc', 'primary_release_date.gte': day(1), 'primary_release_date.lte': day(150) };
+    soonCache = Promise.all([1, 2].map((page) => get('/discover/movie', { ...params, page: String(page) })))
+      .then((pages) => pages.flatMap((p) => p.results).filter((m) => m.release_date && m.poster_path).map(normalize))
+      .catch((e) => { soonCache = null; throw e; });
+  }
+  return soonCache;
 }
 
 /* ---------- Rank 5: a pool of famous movies from very different corners ---------- */

@@ -123,6 +123,8 @@ function memberScore(rating, profile, movie) {
 }
 
 const SERVICE_BOOST = 6;
+/** False for a movie whose release date is still ahead (a "coming soon" pick someone wants). */
+export const isOut = (movie, today = new Date().toISOString().slice(0, 10)) => !(movie.release && movie.release > today);
 /**
  * Where this movie can be watched at no extra cost, assuming the family has every subscription:
  * { free: [name] (free with ads), included: [name] (with a subscription) }. Both empty if it's
@@ -157,10 +159,11 @@ export function activeSnoozes(members, memberIds, now = Date.now()) {
  *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
  *   streaming      — +6 when it can be streamed without renting it
  *   snoozed        — movie ids someone watching said "not tonight" to: left out
+ *   (a movie that isn't released yet is left out until its release date)
  *
  * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }], snoozed: Set }
  */
-export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [], snoozed = new Set() } = {}) {
+export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [], snoozed = new Set(), today = new Date().toISOString().slice(0, 10) } = {}) {
   if (!presentIds.length) return [];
   const profiles = Object.fromEntries(presentIds.map((id) => [id, tasteProfile(entries, id)]));
   const seeded = similar.length > 0;
@@ -178,7 +181,7 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
 
   const out = [];
   for (const { entry, sim = simById.get(String(entry.movie.id))?.sim || 0, because, fresh } of candidates) {
-    if (snoozed.has(String(entry.movie.id))) continue;
+    if (snoozed.has(String(entry.movie.id)) || !isOut(entry.movie, today)) continue;
     const parts = presentIds.map((id) => ({ id, ...memberScore(entry.ratings?.[id], profiles[id], entry.movie) }));
     if (parts.some((p) => p.kind === 'veto')) continue;
     const wanting = parts.filter((p) => p.kind === 'want' || p.kind === 'again');

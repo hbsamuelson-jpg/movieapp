@@ -181,14 +181,14 @@ function QuickSwipe({ entries, me, onRate }) {
             {NOT_WATCHED.map((key) => {
               const s = STATUS[key];
               return (
-                <button key={key} type="button" onClick={() => commit({ status: key, stars: null })} className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-sm font-bold ${key === 'unseen' ? 'bg-cream text-house' : 'bg-seat text-cream'}`}>
+                <button key={key} type="button" disabled={stars > 0} onClick={() => commit({ status: key, stars: null })} className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-sm font-bold transition ${stars > 0 ? 'bg-seat text-dim opacity-40' : key === 'unseen' ? 'bg-cream text-house' : 'bg-seat text-cream'}`}>
                   <s.icon size={20} />
                   {s.label}
                 </button>
               );
             })}
           </div>
-          <div className="-mt-2 text-xs text-dim">Haven't watched it? Pick one of these.</div>
+          <div className="-mt-2 text-xs text-dim">{stars > 0 ? <>You've given it stars. <button type="button" onClick={() => setStars(0)} className="font-bold text-cream underline">Clear stars</button> to pick one of these instead.</> : "Haven't watched it? Pick one of these."}</div>
 
           <button type="button" onClick={() => advance(false)} className="px-4 py-1 text-sm text-dim underline">Skip for now</button>
         </div>

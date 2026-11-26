@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown } from 'lucide-react';
+import { shownStars } from '../lib/suggest.js';
 import { posterUrl } from '../lib/tmdb.js';
 
 /* ---------- People ---------- */
@@ -79,7 +80,7 @@ export function StarRating({ value = 0, onChange, size = 36, label = 'Star ratin
 /* ---------- Status ---------- */
 
 export const STATUS = {
-  seen: { label: 'Watched', icon: Eye, cls: 'bg-aisle text-cream', glyph: null },
+  seen: { label: 'Watched', icon: Eye, cls: 'bg-aisle text-cream', glyph: '\u2713' },
   again: { label: 'Watch again', icon: Repeat, cls: 'bg-gold text-house', glyph: null },
   unseen: { label: 'Want to', icon: Bookmark, cls: 'bg-cream text-house', glyph: '+' },
   meh: { label: "Don't care", icon: Meh, cls: 'bg-aisle text-dim', glyph: '~' },
@@ -98,11 +99,13 @@ export function StatusStub({ rating }) {
         <Icon size={12} strokeWidth={2.5} />
         {s.label}
       </span>
-      {rating.stars ? (
+      {shownStars(rating) ? (
         <span className="perf inline-flex items-center gap-0.5 py-1 pl-2 pr-3 tabular-nums">
           <Star size={11} fill="currentColor" strokeWidth={0} />
           {starText(rating.stars)}
         </span>
+      ) : rating.via === 'rank' ? (
+        <span className="perf py-1 pl-2 pr-3 normal-case tracking-normal">ranked</span>
       ) : (
         <span className="pr-1" />
       )}
@@ -127,11 +130,12 @@ export function MemberDots({ entry, members }) {
         const r = entry?.ratings?.[m.id];
         if (!r) return <span key={m.id} className="h-6 w-6 rounded-full border border-dashed border-aisle" title={`${m.name}: no vote yet`} />;
         const s = STATUS[r.status];
+        const stars = shownStars(r);
         return (
-          <span key={m.id} className="relative" title={`${m.name}: ${s.label}${r.stars ? `, ${r.stars} stars` : ''}`}>
+          <span key={m.id} className="relative" title={`${m.name}: ${s.label}${stars ? `, ${stars} stars` : ''}`}>
             <Avatar member={m} size={24} dim={r.status === 'pass' || r.status === 'meh'} />
-            <span className={`absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold leading-none ${r.status === 'again' ? 'bg-gold text-house' : r.stars ? 'bg-house text-gold ring-1 ring-aisle' : 'bg-cream text-house'}`}>
-              {r.stars ? starText(r.stars) : s.glyph}
+            <span className={`absolute -right-1.5 -top-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-bold leading-none ${r.status === 'again' ? 'bg-gold text-house' : stars ? 'bg-house text-gold ring-1 ring-aisle' : 'bg-cream text-house'}`}>
+              {stars ? starText(stars) : s.glyph}
             </span>
           </span>
         );

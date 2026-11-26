@@ -1,6 +1,6 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { mergeSimilar, predictStars, rankToStars, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { liking, shownStars, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -68,10 +68,24 @@ assert.ok(!suggest(entries, ['a'], { similar: [{ movie: movie(4, 'Laughs', ['Com
 const merged = mergeSimilar([[{ movie: movie(60, 'Both'), sim: 0.6 }, { movie: movie(61, 'One'), sim: 0.7 }], [{ movie: movie(60, 'Both'), sim: 0.6 }, { movie: movie(99, 'Seed'), sim: 1 }]], [99]);
 assert.deepEqual(merged.map((x) => x.movie.title), ['Both', 'One']);
 
-// Rank 5 → stars: 5 down to 2.5, never a veto unless flagged.
-assert.deepEqual(rankToStars(5), [5, 4.5, 3.5, 3, 2.5]);
-assert.deepEqual(rankToStars(4), [5, 4, 3.5, 2.5]);
-assert.deepEqual(rankToStars(3), [5, 3.5, 2.5]);
-assert.equal(rankToStars(5, [false, false, false, false, true])[4], 1.5);
-assert.ok(rankToStars(5).every((s) => s > 2), 'no accidental vetoes');
+// Rank 5 → hidden taste signals: 5 down to 2.5, never a veto unless flagged.
+assert.deepEqual(rankToLiking(5), [5, 4.5, 3.5, 3, 2.5]);
+assert.deepEqual(rankToLiking(4), [5, 4, 3.5, 2.5]);
+assert.deepEqual(rankToLiking(3), [5, 3.5, 2.5]);
+assert.equal(rankToLiking(5, [false, false, false, false, true])[4], 1.5);
+assert.ok(rankToLiking(5).every((s) => s > 2), 'no accidental vetoes');
+
+// A ranking teaches taste without becoming a star rating.
+const ranked = { status: 'seen', stars: null, like: 5, via: 'rank', place: 1, of: 5 };
+assert.equal(shownStars(ranked), null);
+assert.equal(liking(ranked), 5);
+assert.equal(shownStars({ status: 'seen', stars: 4 }), 4);
+assert.equal(shownStars({ status: 'seen', stars: 4.5, via: 'rank' }), null, 'older rankings stop showing stars too');
+assert.equal(liking({ status: 'seen', stars: 4.5, via: 'rank' }), 4.5);
+const learned = tasteProfile({ 1: { movie: movie(1, 'A', ['Horror']), ratings: { z: ranked } }, 2: { movie: movie(2, 'B', ['Horror']), ratings: { z: { ...ranked, like: 4.5 } } } }, 'z');
+assert.equal(learned.count, 2);
+assert.equal(learned.genres[0].name, 'Horror');
+// Flagged "never again" in a ranking still rules the movie out; plain last place does not.
+const flaggedEntry = { 1: { movie: movie(1, 'Flagged', ['Horror']), ratings: { z: { ...ranked, like: 1.5 }, y: want } }, 2: { movie: movie(2, 'Last', ['Horror']), ratings: { z: { ...ranked, like: 2.5 }, y: want } } };
+assert.deepEqual(suggest(flaggedEntry, ['z', 'y']).map((e) => e.movie.title), ['Last']);
 console.log('\nAll suggestion checks passed.');

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { tasteProfile } from '../lib/suggest.js';
+import { liking, tasteProfile } from '../lib/suggest.js';
 import { Chip, MovieRow, StatusStub } from './ui.jsx';
 
 const TABS = [['all', 'All'], ['unseen', 'Want to'], ['seen', 'Watched'], ['again', 'Watch again'], ['meh', "Don't care"], ['pass', 'No thanks']];
@@ -10,7 +10,7 @@ export default function Mine({ entries, me, onOpen, onRate }) {
   const [tab, setTab] = useState('all');
   const mine = Object.values(entries)
     .filter((e) => e.ratings?.[me])
-    .sort((a, b) => (b.ratings[me].stars || 0) - (a.ratings[me].stars || 0) || a.movie.title.localeCompare(b.movie.title));
+    .sort((a, b) => (liking(b.ratings[me]) || 0) - (liking(a.ratings[me]) || 0) || a.movie.title.localeCompare(b.movie.title));
   const count = (key) => (key === 'all' ? mine.length : mine.filter((e) => e.ratings[me].status === key).length);
   const shown = tab === 'all' ? mine : mine.filter((e) => e.ratings[me].status === tab);
   const taste = useMemo(() => tasteProfile(entries, me), [entries, me]);
@@ -21,7 +21,7 @@ export default function Mine({ entries, me, onOpen, onRate }) {
       <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="font-bold text-cream">Your taste so far</h2>
-          <span className="text-xs tabular-nums text-dim">{taste.count} star {taste.count === 1 ? 'rating' : 'ratings'}{taste.count ? ` · ${taste.mean.toFixed(1)} average` : ''}</span>
+          <span className="text-xs tabular-nums text-dim">learned from {taste.count} {taste.count === 1 ? 'movie' : 'movies'} you've watched</span>
         </div>
         {taste.count < TASTE_MIN || !top.length ? (
           <p className="text-sm text-dim">Rate {Math.max(1, TASTE_MIN - taste.count)} more movies you've watched and this fills in. The more you rate, the better the suggestions get.</p>
@@ -31,7 +31,7 @@ export default function Mine({ entries, me, onOpen, onRate }) {
               <li key={g.name} className="grid grid-cols-[6.5rem_1fr_auto] items-center gap-3 text-sm">
                 <span className="truncate font-bold text-cream">{g.name}</span>
                 <span className="h-2 overflow-hidden rounded-full bg-aisle"><span className="block h-full rounded-full bg-gold" style={{ width: `${(g.score / 5) * 100}%` }} /></span>
-                <span className="tabular-nums text-dim">{g.avg.toFixed(1)}★ · {g.n}</span>
+                <span className="tabular-nums text-dim">{g.n} {g.n === 1 ? 'movie' : 'movies'}</span>
               </li>
             ))}
           </ul>

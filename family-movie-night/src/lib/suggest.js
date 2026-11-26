@@ -3,8 +3,20 @@
 // An entry is { movie, ratings: { [memberId]: { status, stars } } }
 //   watched:      'seen'   (stars required)   'again' (stars required, would rewatch)
 //   not watched:  'unseen' (want to)          'meh'   (don't care)         'pass' (no thanks)
+//   from Rank 5:  { status: 'seen', stars: null, like, via: 'rank', place, of }
+//                 `like` is a hidden 0–5 taste signal. It is never shown as a star rating.
 
-const rated = (r) => !!r && typeof r.stars === 'number' && r.stars > 0;
+/** Stars the person actually gave. A Rank 5 result has none, whatever it stores internally. */
+export const shownStars = (r) => (r && r.via !== 'rank' && typeof r.stars === 'number' && r.stars > 0 ? r.stars : null);
+
+/** How much the person liked it, 0–5: their stars, or the hidden signal from a ranking. */
+export const liking = (r) => {
+  if (!r) return null;
+  if (shownStars(r)) return r.stars;
+  if (typeof r.like === 'number') return r.like;
+  return r.via === 'rank' && typeof r.stars === 'number' ? r.stars : null; // rankings saved before `like` existed
+};
+const rated = (r) => liking(r) != null;
 
 /**
  * What one person likes, learned from their star ratings.
@@ -18,12 +30,12 @@ export function tasteProfile(entries, memberId) {
   for (const entry of Object.values(entries)) {
     const r = entry.ratings?.[memberId];
     if (!rated(r)) continue;
-    sum += r.stars;
+    sum += liking(r);
     count += 1;
     for (const g of entry.movie.genres || []) {
       byGenre[g] ||= { name: g, n: 0, sum: 0 };
       byGenre[g].n += 1;
-      byGenre[g].sum += r.stars;
+      byGenre[g].sum += liking(r);
     }
   }
   const mean = count ? sum / count : 3.5;
@@ -51,9 +63,11 @@ function memberScore(rating, profile, movie) {
   if (rating.status === 'pass') return { kind: 'veto' };
   if (rating.status === 'unseen') return { kind: 'want', score: 92 };
   if (rating.status === 'meh') return { kind: 'meh', score: 55 };
-  if (rated(rating) && rating.status === 'again') return { kind: 'again', score: rating.stars * 20 };
-  if (rated(rating) && rating.stars <= 2) return { kind: 'veto' };
-  return { kind: 'seen', score: rating.stars * 20 * 0.5 }; // seen it, didn't ask for a rewatch
+  const liked = liking(rating);
+  if (liked == null) return { kind: 'seen', score: 35 }; // watched, no opinion recorded
+  if (rating.status === 'again') return { kind: 'again', score: liked * 20 };
+  if (liked <= 2) return { kind: 'veto' };
+  return { kind: 'seen', score: liked * 20 * 0.5 }; // seen it, didn't ask for a rewatch
 }
 
 /**
@@ -135,17 +149,18 @@ export function mergeSimilar(lists, seedIds = []) {
     .sort((a, b) => b.sim - a.sim);
 }
 
-const RANK_STARS = { 1: [4], 2: [4.5, 3], 3: [5, 3.5, 2.5], 4: [5, 4, 3.5, 2.5], 5: [5, 4.5, 3.5, 3, 2.5] };
+const RANK_LIKING = { 1: [4], 2: [4.5, 3], 3: [5, 3.5, 2.5], 4: [5, 4, 3.5, 2.5], 5: [5, 4.5, 3.5, 3, 2.5] };
 
 /**
- * Turn a best-to-worst ranking into star ratings: the top pick gets 5, the middle 3.5, the
- * bottom 2.5. 2.5 is deliberately above the 2-star veto line, because finishing last in a
- * batch is not the same as never wanting to see it again. A movie flagged "never again" gets
- * 1.5 instead, which does rule it out.
+ * Turn a best-to-worst ranking into hidden taste signals on the same 0–5 scale as stars:
+ * 5 at the top, 3.5 in the middle, 2.5 at the bottom. These are never shown as star ratings;
+ * they only feed the taste profile. 2.5 is deliberately above the veto line (2), because
+ * finishing last in a batch is not the same as never wanting to see it again. A movie flagged
+ * "never again" gets 1.5 instead, which does rule it out.
  */
-export function rankToStars(count, flagged = []) {
-  const stars = RANK_STARS[Math.min(5, Math.max(1, count))];
-  return Array.from({ length: count }, (_, n) => (flagged[n] ? 1.5 : stars[Math.min(n, stars.length - 1)]));
+export function rankToLiking(count, flagged = []) {
+  const values = RANK_LIKING[Math.min(5, Math.max(1, count))];
+  return Array.from({ length: count }, (_, n) => (flagged[n] ? 1.5 : values[Math.min(n, values.length - 1)]));
 }
 
 /** filters: { genre: string | '', certs: string[], maxRuntime: number | 0 } */

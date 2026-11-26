@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
+import { shownStars } from '../lib/suggest.js';
 import { enrich } from '../lib/tmdb.js';
 import { Avatar, CertBadge, formatRuntime, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
 
@@ -8,7 +9,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
   const [movie, setMovie] = useState(entry?.movie?.detailed ? entry.movie : initial);
   const mine = entry?.ratings?.[me];
   const [status, setStatus] = useState(mine?.status || null);
-  const [stars, setStars] = useState(mine?.stars || 0);
+  const [stars, setStars] = useState(shownStars(mine) || 0);
 
   useEffect(() => {
     let live = true;

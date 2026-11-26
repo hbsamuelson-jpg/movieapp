@@ -132,7 +132,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
   Put movies on the shared shortlist with **+**, then choose together or **Spin**. Filters (MPAA rating, genre, runtime) are behind the Filters button.
 - **Rate** — two modes, switched at the top:
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
-  - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**.
+  - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
 - **Search** — find one specific movie.
 - **Mine** — your ratings, plus a summary of your taste by category.
 
@@ -163,7 +163,7 @@ People who aren't watching tonight don't count, including their vetoes.
 
 **Movies like….** For each reference movie the app pulls four lists from TMDB: its recommendations, well-known movies sharing all its genres, well-known movies sharing its lead genre and any of its keywords, and its "similar" list. Each movie gets a similarity from 0 to 1; appearing in several lists, or being similar to several reference movies, raises it, and obscure titles are discounted. The list then shows only those similar movies, scored 65% group score and 35% similarity. Rule 2 above is dropped (nobody needs to have asked for them), rule 1 still applies, and a movie everyone present has already watched is left out.
 
-**Rank 5 → stars.** A submitted ranking is saved as ordinary star ratings: 5, 4.5, 3.5, 3, 2.5 from top to bottom (5, 4, 3.5, 2.5 for four). Last place is 2.5 on purpose, above the 2-star veto line. Tapping **Never again** on a movie saves 1.5 instead, which does rule it out. These feed "Your taste so far" like any other rating and can be edited under Mine.
+**Rank 5 → taste, not stars.** A submitted ranking does not give any movie a star rating. Each movie is saved as "watched" with a hidden taste signal on the same 0–5 scale the taste profile uses: 5, 4.5, 3.5, 3, 2.5 from top to bottom. That number is never displayed; ranked movies show as "Watched · ranked". It feeds "Your taste so far" and the predictions exactly as a star rating would. Last place is 2.5 on purpose, above the veto line. Tapping **Never again** saves 1.5 instead, which does rule the movie out. Opening a ranked movie and giving it stars replaces the ranking with a normal rating.
 
 `npm test` checks these rules.
 
@@ -195,7 +195,8 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
   ratings: {
     "k3x9q2ab": { status: "again",  stars: 5    },
     "p7m1zz0c": { status: "unseen", stars: null }   // a missing id = hasn't rated it
-    // ratings saved from Rank 5 also carry  via: "rank"
+    // from Rank 5:  { status: "seen", stars: null, like: 4.5, via: "rank", place: 2, of: 5 }
+    //   (like = hidden taste signal, never shown as stars)
     // status is one of: seen | again | unseen | meh | pass
   }
   updatedAt: timestamp

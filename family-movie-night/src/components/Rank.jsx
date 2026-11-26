@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, EyeOff, ThumbsDown } from 'lucide-react';
-import { rankToStars } from '../lib/suggest.js';
+import { rankToLiking } from '../lib/suggest.js';
 import { diversePick } from '../lib/tmdb.js';
 import { Notice, Poster } from './ui.jsx';
 
 const BATCH = 5;
-const starText = (stars) => (stars % 1 ? stars.toFixed(1) : stars);
 
 /**
  * Rank 5. Five well-known movies from very different genres and decades.
  *   1. Kick out any you haven't seen; each is swapped for a fresh one.
  *   2. Order what's left from best to worst with the arrows.
- *   3. Submit. The order becomes star ratings (5 at the top, 2.5 at the bottom).
- * Last place is not a veto. Tap the thumbs-down on a movie to mark it "never again".
+ *   3. Submit. The order teaches the app what you like. No star ratings are given: each movie
+ *      is saved as "watched" with a hidden taste signal, stronger the higher you ranked it.
+ * Last place is not a veto. Tap "Never again" on a movie to rule it out.
  */
 export default function Rank({ entries, me, onRate }) {
   const [slots, setSlots] = useState([]); // [{ key, movie, genre, decade, flagged } | { key, loading: true } | { key, empty: true }]
-  const [result, setResult] = useState(null); // [{ movie, stars }] after a submit
+  const [result, setResult] = useState(null); // the movies, in the order submitted
   const [rounds, setRounds] = useState(0);
   const [error, setError] = useState('');
   const shown = useRef(new Set()); // everything offered this session, so nothing comes back
@@ -71,12 +71,11 @@ export default function Rank({ entries, me, onRate }) {
 
   const ranked = slots.filter((s) => s.movie);
   const busy = slots.some((s) => s.loading);
-  const stars = rankToStars(ranked.length, ranked.map((s) => s.flagged));
   const submit = () => {
-    const saved = ranked.map((s, n) => ({ movie: s.movie, stars: stars[n] }));
-    // `via: 'rank'` records where the rating came from; everything else treats it as a normal rating.
-    saved.forEach(({ movie, stars: value }) => onRate(movie, { status: 'seen', stars: value, via: 'rank' }));
-    setResult(saved);
+    const like = rankToLiking(ranked.length, ranked.map((s) => s.flagged));
+    // Saved as watched with no stars. `like` is the hidden taste signal; `place`/`of` record the ranking.
+    ranked.forEach((s, n) => onRate(s.movie, { status: 'seen', stars: null, like: like[n], via: 'rank', place: n + 1, of: ranked.length }));
+    setResult(ranked.map((s) => ({ movie: s.movie, flagged: s.flagged })));
     setRounds((n) => n + 1);
   };
 
@@ -85,15 +84,15 @@ export default function Rank({ entries, me, onRate }) {
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2 text-gold"><Check size={20} /><h2 className="text-lg font-bold">Saved to your taste</h2></div>
         <ol className="flex flex-col gap-1 rounded-xl bg-seat p-3">
-          {result.map(({ movie, stars: value }, n) => (
+          {result.map(({ movie, flagged }, n) => (
             <li key={movie.id} className="flex items-center gap-3 py-1 text-sm">
               <span className="w-4 text-right font-bold tabular-nums text-dim">{n + 1}</span>
               <span className="min-w-0 flex-1 truncate font-bold text-cream">{movie.title}</span>
-              <span className="tabular-nums text-gold">{starText(value)}★</span>
+              {flagged && <span className="text-xs text-dim">never again</span>}
             </li>
           ))}
         </ol>
-        <p className="text-xs text-dim">{rounds} {rounds === 1 ? 'round' : 'rounds'} done. Three or four rounds give the suggestions a solid read on you. You can fine-tune any of these under Mine.</p>
+        <p className="text-xs text-dim">{rounds} {rounds === 1 ? 'round' : 'rounds'} done. No star ratings were given; this only sharpens what the app knows about your taste. Three or four rounds give it a solid read.</p>
         <button type="button" onClick={deal} className="rounded-lg bg-velvet px-4 py-3.5 text-lg font-bold text-cream">Next batch</button>
       </div>
     );
@@ -123,7 +122,7 @@ export default function Rank({ entries, me, onRate }) {
                   <span className="line-clamp-2 font-bold leading-tight text-cream">{movie.title}</span>
                 </div>
                 <div className="truncate text-xs text-dim">{movie.year} · {(movie.genres || []).slice(0, 2).join(', ')}</div>
-                <div className="mt-0.5 text-xs tabular-nums text-dim">{slot.flagged ? 'Never again · 1.5★' : `${starText(stars[place])}★ if it stays here`}</div>
+                {slot.flagged && <div className="mt-0.5 text-xs text-dim">Never again: this one gets ruled out</div>}
               </div>
               <div className="flex flex-col justify-between">
                 <button type="button" onClick={() => kick(slot.key)} aria-label={`Haven't seen ${movie.title}`} className="inline-flex h-9 items-center gap-1 rounded-lg border border-aisle px-2 text-xs font-bold text-cream"><EyeOff size={14} /> Haven't seen</button>

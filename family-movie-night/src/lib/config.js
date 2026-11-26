@@ -15,6 +15,10 @@ export const tmdbKey = env.VITE_TMDB_API_KEY || '';
 /** True when a TMDB key is present. Without it, the app uses a built-in list of 150 movies with no posters. */
 export const hasTmdb = Boolean(tmdbKey);
 
+/** Optional OMDb key: adds Rotten Tomatoes scores. Without it the app shows the TMDB audience score instead. */
+export const omdbKey = env.VITE_OMDB_API_KEY || '';
+export const hasOmdb = Boolean(omdbKey);
+
 export const CERTS = ['G', 'PG', 'PG-13', 'R'];
 
 export const pref = {

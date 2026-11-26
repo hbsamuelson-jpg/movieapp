@@ -113,6 +113,18 @@ Run `npm run deploy` again whenever you change something. `firebase.json` is alr
 
 **On the phones:** open the site and use **Share → Add to Home Screen** (iPhone) or **Install app** (Android). It then opens full-screen like an app and still updates itself.
 
+## Rotten Tomatoes scores (optional)
+
+Rotten Tomatoes has no public API. The app gets the Tomatometer through OMDb, which needs its own free key:
+
+1. Go to https://www.omdbapi.com/apikey.aspx, choose the free key, enter an email, and click the activation link they send.
+2. In Vercel → Settings → Environment Variables, add `VITE_OMDB_API_KEY` with that key. Like the TMDB key, this one is read by the browser, so choose **Config** if Vercel asks.
+3. Redeploy.
+
+With the key, every movie shows **RT 93%**. Without it, or for a movie Rotten Tomatoes has no score for, the app shows the TMDB audience score instead, labelled **TMDB 78%**.
+
+The free OMDb key allows a limited number of lookups per day (1,000 at the time of writing). The app keeps that low: each score is cached on the device, and saved with the movie once anyone rates it. If the limit is hit, scores for new movies fall back to TMDB until the next day.
+
 ## The AI assistant (optional)
 
 The **Ask** tab is a chat that knows what everyone watching has rated, wants, and has ruled out. Its suggestions can go straight onto the shortlist.
@@ -159,7 +171,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 - **Rate** — two modes, switched at the top:
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
   - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
-- **Search** — find one specific movie.
+- **Search** — find one specific movie, or switch to **Directors** to look up a director or writer and browse everything they made.
 - **Mine** — your profile: up to ten **all-time favourites**, a summary of your taste by category, the directors and writers you keep liking, and everything you've rated.
 
 ### Ratings
@@ -177,6 +189,8 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 **Taste.** For each person the app averages their stars per category, pulled toward their overall average until a category has a few ratings. For a movie they haven't rated it predicts their stars from those category scores, blended with the TMDB audience score. The more they rate, the more weight their own taste gets (up to 70% after 30 ratings).
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
+
+**Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has it, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
 
 **Directors and writers.** Movie details include the director(s) and up to two writers. For each person the app tracks who is behind the movies they rated 4 or higher; anyone who shows up twice (or once on an all-time favourite) becomes a "keeps liking" name. A movie by one of them gets half a star added to that person's predicted rating, and their other well-known movies are pulled into Tonight's new-to-us list. Movies rated before this existed get their credits filled in quietly in the background.
 
@@ -225,6 +239,8 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     vote: 8.3,                        // TMDB audience score, 0–10
     overview: "…",
     crew: [ { id: 1, name: "Robert Zemeckis", role: "director" }, … ],  // director(s) + up to 2 writers
+    imdb: "tt0088763", rt: 93,        // IMDb id and Rotten Tomatoes score (null if none)
+    scored: true,                     // the Rotten Tomatoes lookup has been done
     detailed: true                    // runtime + cert have been fetched
   }
   ratings: {
@@ -263,7 +279,7 @@ src/
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
     Ask.jsx                 the assistant chat
     Rank.jsx                Rank 5: kick the unseen, order the rest, submit
-    Browse.jsx              search
+    Browse.jsx              search for movies, or for directors and writers
     Mine.jsx                your favourites, taste summary and ratings
     MoviePicker.jsx         type-a-title movie picker used for favourites and Movies like…
     RateSheet.jsx           movie details and rating sheet

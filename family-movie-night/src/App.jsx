@@ -12,7 +12,7 @@ import { applyUpdate, watchForUpdates } from './lib/autoUpdate.js';
 import { hasFirebase, pref } from './lib/config.js';
 import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js';
 import { createLocalStore, createSharedStore } from './lib/store.js';
-import { enrich } from './lib/tmdb.js';
+import { enrich, needsDetails } from './lib/tmdb.js';
 
 const TABS = [
   { id: 'tonight', label: 'Tonight', icon: Popcorn },
@@ -42,14 +42,14 @@ export default function App() {
   useEffect(() => (hasFirebase ? watchSession(setSession, (e) => setProblem(explain(e))) : undefined), []);
   useEffect(() => (ready ? store.subscribe(setData, (e) => setProblem(explain(e))) : undefined), [ready]);
 
-  // Movies rated before directors and writers were tracked: fill those in quietly, a few at a time.
+  // Movies saved before credits and review scores were tracked: fill those in quietly, a few at a time.
   const backfilled = useRef(new Set());
   useEffect(() => {
     if (!data) return;
-    const missing = Object.values(data.entries).filter((e) => !e.movie.crew && !backfilled.current.has(String(e.movie.id))).slice(0, 12);
+    const missing = Object.values(data.entries).filter((e) => needsDetails(e.movie) && !backfilled.current.has(String(e.movie.id))).slice(0, 12);
     missing.forEach((e) => {
       backfilled.current.add(String(e.movie.id));
-      enrich(e.movie).then((full) => full.crew && store.updateMovie(full));
+      enrich(e.movie).then((full) => full !== e.movie && full.detailed && store.updateMovie(full));
     });
   }, [data]);
 
@@ -83,7 +83,7 @@ export default function App() {
   const rate = useCallback((movie, rating) => {
     store.setRating(movie, me, rating);
     // List results don't carry runtime or MPAA rating; fetch them once so filters and taste work.
-    if (rating && !(movie.detailed && movie.crew)) enrich(movie).then((full) => full.crew && store.updateMovie(full));
+    if (rating && needsDetails(movie)) enrich(movie).then((full) => full.detailed && store.updateMovie(full));
   }, [me]);
 
   /* ----- Gate screens ----- */
@@ -118,7 +118,7 @@ export default function App() {
     store.setFavorites(me, [...favorites, movie]);
     const mine = entries[movie.id]?.ratings?.[me];
     if (!mine || mine.status === 'unseen' || mine.status === 'meh') store.setRating(movie, me, { status: 'seen', stars: null, like: 5, via: 'favorite' });
-    else if (entries[movie.id] && !entries[movie.id].movie.crew && movie.crew) store.updateMovie(movie);
+    else if (entries[movie.id] && needsDetails(entries[movie.id].movie)) store.updateMovie(movie);
   };
   const removeFavorite = (movie) => {
     store.setFavorites(me, favorites.filter((m) => String(m.id) !== String(movie.id)));

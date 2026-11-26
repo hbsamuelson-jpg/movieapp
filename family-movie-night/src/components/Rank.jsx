@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, EyeOff, ThumbsDown } from 'lucide-react';
 import { rankToLiking } from '../lib/suggest.js';
-import { diversePick } from '../lib/tmdb.js';
-import { Notice, Poster } from './ui.jsx';
+import { diversePick, enrich } from '../lib/tmdb.js';
+import { Notice, Poster, ScoreBadge } from './ui.jsx';
 
 const BATCH = 5;
 
@@ -33,7 +33,11 @@ export default function Rank({ entries, me, onRate }) {
     try {
       const found = await diversePick({ avoidGenres: others.map((s) => s.genre), avoidDecades: others.map((s) => s.decade), exclude });
       if (batch !== live.current) return;
-      if (found) shown.current.add(String(found.movie.id));
+      if (found) {
+        shown.current.add(String(found.movie.id));
+        found.movie = await enrich(found.movie); // review score and director for the row
+        if (batch !== live.current) return;
+      }
       update((list) => list.map((s) => (s.key === key ? (found ? { key, ...found, flagged: false } : { key, empty: true }) : s)));
     } catch (e) {
       if (batch !== live.current) return;
@@ -121,7 +125,7 @@ export default function Rank({ entries, me, onRate }) {
                   <span className="font-display text-lg leading-none text-gold">{place + 1}</span>
                   <span className="line-clamp-2 font-bold leading-tight text-cream">{movie.title}</span>
                 </div>
-                <div className="truncate text-xs text-dim">{movie.year} · {(movie.genres || []).slice(0, 2).join(', ')}</div>
+                <div className="flex items-center gap-1.5 text-xs text-dim"><ScoreBadge movie={movie} /><span className="truncate">{movie.year} · {(movie.genres || []).slice(0, 2).join(', ')}</span></div>
                 {slot.flagged && <div className="mt-0.5 text-xs text-dim">Never again: this one gets ruled out</div>}
               </div>
               <div className="flex flex-col justify-between">

@@ -1,5 +1,5 @@
 // Movie catalog. Uses TMDB when a key is present, otherwise the built-in demo catalog.
-import { hasTmdb, tmdbKey } from './config.js';
+import { hasOmdb, hasTmdb, omdbKey, pref, tmdbKey } from './config.js';
 import { DEMO_CATALOG } from './demoData.js';
 
 const BASE = 'https://api.themoviedb.org/3';
@@ -195,15 +195,61 @@ export async function searchMovies(query) {
 }
 
 /** Fill in runtime, MPAA rating and full genres. Returns the movie unchanged in demo mode or on failure. */
+/** True when a movie is missing details the app can still fetch (rating, runtime, crew, critic score). */
+export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!hasOmdb || movie.scored));
+
 export async function enrich(movie) {
-  if (!hasTmdb || (movie.detailed && movie.crew)) return movie;
+  if (!needsDetails(movie)) return movie;
   try {
     const raw = await get(`/movie/${movie.id}`, { append_to_response: 'release_dates,credits', language: 'en-US' });
     const us = raw.release_dates?.results?.find((r) => r.iso_3166_1 === 'US');
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
-    return { ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []), detailed: true };
+    const rt = await rottenTomatoes(raw.imdb_id);
+    return {
+      ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []),
+      imdb: raw.imdb_id || null, rt: rt.score, scored: rt.checked, detailed: true,
+    };
   } catch {
     return movie;
+  }
+}
+
+/* ---------- Rotten Tomatoes, via OMDb ---------- */
+// Rotten Tomatoes has no public API. OMDb (omdbapi.com) relays the Tomatometer for a movie's
+// IMDb id. Its free key allows a limited number of lookups a day, so every answer is cached
+// on the device, and saved with the movie once someone rates it.
+
+const RT_CACHE = 'rt-cache';
+let rtCache = null;
+const rtStore = () => (rtCache ||= pref.get(RT_CACHE, {}));
+const rtRemember = (imdbId, score) => {
+  const cache = rtStore();
+  cache[imdbId] = score;
+  const keys = Object.keys(cache);
+  if (keys.length > 3000) keys.slice(0, 500).forEach((k) => delete cache[k]); // keep it bounded
+  pref.set(RT_CACHE, cache);
+};
+
+/** Returns { score: 0–100 | null, checked }. `checked` is false when the lookup could not be made at all. */
+async function rottenTomatoes(imdbId) {
+  if (!hasOmdb || !imdbId) return { score: null, checked: false };
+  const cache = rtStore();
+  if (imdbId in cache) return { score: cache[imdbId], checked: true };
+  try {
+    const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${omdbKey}`);
+    const data = await res.json();
+    if (data.Response === 'False') {
+      // "Movie not found" is a real answer; a bad key or a used-up daily limit is not.
+      const settled = /not found|incorrect imdb/i.test(data.Error || '');
+      if (settled) rtRemember(imdbId, null);
+      return { score: null, checked: settled };
+    }
+    const value = (data.Ratings || []).find((r) => r.Source === 'Rotten Tomatoes')?.Value;
+    const score = value ? parseInt(value, 10) : null;
+    rtRemember(imdbId, Number.isFinite(score) ? score : null);
+    return { score: Number.isFinite(score) ? score : null, checked: true };
+  } catch {
+    return { score: null, checked: false };
   }
 }
 
@@ -215,6 +261,41 @@ function keyCrew(crew) {
     .filter((c, n, all) => all.findIndex((x) => x.id === c.id) === n)
     .slice(0, 2).map((c) => ({ id: c.id, name: c.name, role: 'writer' }));
   return [...directors, ...writers];
+}
+
+/* ---------- Directors and writers ---------- */
+
+/** Search for a person. Directors and writers come first; each has a few titles they're known for. */
+export async function searchPeople(query) {
+  const q = query.trim();
+  if (!q || !hasTmdb) return [];
+  const data = await get('/search/person', { query: q, include_adult: 'false', language: 'en-US' });
+  const order = { Directing: 0, Writing: 1 };
+  return data.results
+    .filter((p) => p.popularity > 0.5 || p.known_for_department === 'Directing')
+    .sort((a, b) => (order[a.known_for_department] ?? 2) - (order[b.known_for_department] ?? 2) || b.popularity - a.popularity)
+    .slice(0, 8)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      department: p.known_for_department || '',
+      knownFor: (p.known_for || []).filter((k) => k.media_type === 'movie').map((k) => k.title).slice(0, 3),
+    }));
+}
+
+/** Everything a person directed and wrote, most-watched first: { directed: [movie], written: [movie] }. */
+export async function filmography(person) {
+  const data = await get(`/person/${person.id}/movie_credits`, { language: 'en-US' });
+  const pickJobs = (jobs, skip = new Set()) => {
+    const seen = new Set();
+    return (data.crew || [])
+      .filter((raw) => jobs.includes(raw.job) && raw.vote_count >= 20 && !skip.has(raw.id) && !seen.has(raw.id) && seen.add(raw.id))
+      .sort((a, b) => b.vote_count - a.vote_count)
+      .slice(0, 40)
+      .map(normalize);
+  };
+  const directed = pickJobs(['Director']);
+  return { directed, written: pickJobs(WRITING_JOBS, new Set(directed.map((m) => m.id))) };
 }
 
 /** Well-known movies a person actually directed (or wrote, for a writer), most-watched first. */

@@ -82,6 +82,15 @@ export function predictStars(profile, movie) {
   return Math.max(0.5, Math.min(5, taste * trust + crowd * (1 - trust) + bonus));
 }
 
+/** The critic score to show and rank by: Rotten Tomatoes when known, otherwise the TMDB audience score. Both 0–100. */
+export const quality = (movie) => (typeof movie.rt === 'number' ? movie.rt : movie.vote ? Math.round(movie.vote * 10) : null);
+
+/** A small nudge for well-reviewed movies: at most 4 points either way, centred on a score of 65. */
+export const qualityNudge = (movie) => {
+  const q = quality(movie);
+  return q == null ? 0 : Math.max(-1, Math.min(1, (q - 65) / 35)) * 4;
+};
+
 /** One person's enthusiasm for one movie, 0–100, or a veto. */
 function memberScore(rating, profile, movie) {
   if (!rating) return { kind: 'guess', score: predictStars(profile, movie) * 20 * 0.85 };
@@ -110,6 +119,7 @@ function memberScore(rating, profile, movie) {
  * one. The group score favours picks nobody will hate. Then:
  *   new movies     — 75% group score, 25% how closely they match the group's interests
  *   similar        — 65% group score, 35% similarity to the seeds
+ *   reviews        — a nudge of up to 4 points either way for the Rotten Tomatoes score
  *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
  *
  * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }] }
@@ -143,6 +153,8 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
     let raw = avg * 0.7 + Math.min(...scores) * 0.3;
     if (seeded) raw = raw * 0.65 + sim * 100 * 0.35;
     else if (fresh) raw = raw * 0.75 + sim * 100 * 0.25;
+
+    raw += qualityNudge(entry.movie); // better-reviewed movies edge ahead, only a little
 
     const vibes = priorityGenres.filter((g) => (entry.movie.genres || []).includes(g));
     if (vibes.length) raw += Math.min(25, 15 + 5 * (vibes.length - 1));

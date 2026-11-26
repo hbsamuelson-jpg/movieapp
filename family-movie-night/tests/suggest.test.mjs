@@ -1,6 +1,6 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { liking, shownStars, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { liking, quality, qualityNudge, shownStars, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -115,4 +115,19 @@ assert.equal(lanes['Everyone Wants'], 'wanted');
 assert.ok(!('Nobody Asked' in lanes) && !('Vetoed' in lanes));
 assert.ok(tonight.every((e) => e.lane === 'new' || e.wanting > 0), 'every row is wanted by someone or new to everyone');
 assert.equal(tonight.find((e) => e.lane === 'new').because, 'like Everyone Wants');
+
+// Review scores: Rotten Tomatoes wins when known; the nudge is small and capped.
+assert.equal(quality({ rt: 93, vote: 6 }), 93);
+assert.equal(quality({ rt: null, vote: 7.8 }), 78);
+assert.equal(quality({}), null);
+assert.equal(qualityNudge({ rt: 100 }), 4);
+assert.equal(qualityNudge({ rt: 0 }), -4);
+assert.equal(qualityNudge({ rt: 65 }), 0);
+assert.equal(qualityNudge({}), 0);
+const twins = { 1: { movie: { ...movie(1, 'Acclaimed', ['Drama']), rt: 97 }, ratings: { q: want } }, 2: { movie: { ...movie(2, 'Panned', ['Drama']), rt: 20 }, ratings: { q: want } } };
+const order = suggest(twins, ['q']);
+assert.deepEqual(order.map((e) => e.movie.title), ['Acclaimed', 'Panned'], 'equal interest: the better-reviewed one leads');
+assert.ok(order[0].rank - order[1].rank <= 8, 'but only by a little');
+// A panned movie someone wants still beats an acclaimed one nobody asked for... which is not listed at all.
+assert.ok(suggest({ 1: twins[2], 2: { movie: { ...movie(3, 'Great Unasked', ['Drama']), rt: 99 }, ratings: { q: seen(4) } } }, ['q']).every((e) => e.movie.title === 'Panned'));
 console.log('\nAll suggestion checks passed.');

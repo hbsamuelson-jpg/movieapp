@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown } from 'lucide-react';
-import { shownStars } from '../lib/suggest.js';
+import { quality, shownStars } from '../lib/suggest.js';
 import { posterUrl } from '../lib/tmdb.js';
 
 /* ---------- People ---------- */
@@ -124,6 +124,18 @@ export const directedBy = (movie) => {
   return names.length ? `Directed by ${names.join(' & ')}` : null;
 };
 
+/** The review score: Rotten Tomatoes when the app has it, otherwise the TMDB audience score, labelled as such. */
+export function ScoreBadge({ movie, className = '' }) {
+  const score = quality(movie);
+  if (score == null) return null;
+  const isRt = typeof movie.rt === 'number';
+  return (
+    <span className={`shrink-0 whitespace-nowrap tabular-nums ${isRt && score >= 60 ? 'font-bold text-cream' : 'text-dim'} ${className}`} title={isRt ? 'Rotten Tomatoes critics score' : 'TMDB audience score (no Rotten Tomatoes score available)'}>
+      {isRt ? 'RT' : 'TMDB'} {score}%
+    </span>
+  );
+}
+
 export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m` : null);
 
 /* ---------- Rows ---------- */
@@ -163,7 +175,10 @@ export function MovieRow({ movie, index, onOpen, note, aside, action }) {
             <span className="truncate font-bold text-cream">{movie.title}</span>
             <CertBadge cert={movie.cert} />
           </span>
-          <span className="block truncate text-xs text-dim">{facts.join(' · ')}</span>
+          <span className="flex items-center gap-1.5 text-xs text-dim">
+            <ScoreBadge movie={movie} />
+            <span className="truncate">{facts.join(' · ')}</span>
+          </span>
           {note && <span className="mt-0.5 block truncate text-xs">{note}</span>}
         </span>
         {aside}

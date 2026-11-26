@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, Plus, X } from 'lucide-react';
 import { shownStars } from '../lib/suggest.js';
 import { enrich } from '../lib/tmdb.js';
-import { Avatar, CertBadge, directedBy, formatRuntime, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
+import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
 export default function RateSheet({ movie: initial, entry, members, me, listed, onToggleListed, onSave, onClose }) {
@@ -43,6 +43,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
               <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-full p-2 text-dim hover:bg-aisle hover:text-cream"><X size={20} /></button>
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-dim">
+              <ScoreBadge movie={movie} />
               {movie.year && <span className="tabular-nums">{movie.year}</span>}
               <CertBadge cert={movie.cert} />
               {movie.runtime && <span className="tabular-nums">{formatRuntime(movie.runtime)}</span>}

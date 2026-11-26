@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { hasTmdb, pref } from '../lib/config.js';
-import { ERAS, GENRE_CHOICES, topOfYear, yearsFor } from '../lib/tmdb.js';
+import { enrich, ERAS, GENRE_CHOICES, topOfYear, yearsFor } from '../lib/tmdb.js';
 import Rank from './Rank.jsx';
-import { CertBadge, Chip, NOT_WATCHED, Notice, Poster, StarRating, STATUS } from './ui.jsx';
+import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS } from './ui.jsx';
 
 const PER_YEAR = [5, 10, 20];
 const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank 5']];
@@ -66,7 +66,16 @@ function QuickSwipe({ entries, me, onRate }) {
   useEffect(load, [year, perYear, genreKey, inRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todo = (movies || []).filter((m) => !handled.has(String(m.id)) && !entries[m.id]?.ratings?.[me]);
-  const movie = finished ? null : todo[0];
+  const next = finished ? null : todo[0];
+
+  // Fetch the review score, rating and director for the card in front of you (and the one after).
+  const [details, setDetails] = useState({});
+  useEffect(() => {
+    todo.slice(0, 2).filter((m) => !details[m.id]).forEach((m) => {
+      enrich(m).then((full) => setDetails((all) => ({ ...all, [m.id]: full })));
+    });
+  }, [next?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const movie = next ? details[next.id] || next : null;
 
   // This year is done (or had nothing): step to the next year in the list.
   useEffect(() => {
@@ -148,11 +157,12 @@ function QuickSwipe({ entries, me, onRate }) {
           <div className="flex flex-col items-center gap-1 text-center">
             <h2 className="text-xl font-bold leading-tight text-cream">{movie.title}</h2>
             <div className="flex items-center gap-2 text-sm text-dim">
+              <ScoreBadge movie={movie} />
               <span className="tabular-nums">{movie.year}</span>
               <CertBadge cert={movie.cert} />
-              <span className="tabular-nums">#{position} of {movies.length} in {year}</span>
+              <span className="tabular-nums">#{position} of {movies.length}</span>
             </div>
-            {movie.genres?.length > 0 && <div className="text-xs text-dim">{movie.genres.slice(0, 3).join(' · ')}</div>}
+            <div className="text-xs text-dim">{[movie.genres?.slice(0, 3).join(' · '), directedBy(movie)].filter(Boolean).join(' · ')}</div>
           </div>
 
           <div className="flex w-full flex-col items-center gap-3 rounded-xl bg-seat p-4">

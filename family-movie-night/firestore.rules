@@ -1,9 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // The app signs every device in anonymously, so "signed in" here means "using the app".
-    // There are no personal accounts: anyone who can open the site can read and change
-    // the shared names, ratings and shortlist. Share the link only with people you trust.
+    // Every device is signed in, anonymously or with Google, so "signed in" here means
+    // "using the app". Anyone who can open the site can read and change the shared names,
+    // ratings and shortlist. Linking a name to Google stops others picking it in the app;
+    // it is a convenience, not a lock on the data. Share the link only with people you trust.
     match /groups/{spaceId} {
       allow read, write: if request.auth != null;
       match /movies/{movieId} {

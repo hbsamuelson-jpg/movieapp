@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Popcorn, Search, Star, Ticket } from 'lucide-react';
 import Browse from './components/Browse.jsx';
 import Group from './components/Group.jsx';
@@ -9,7 +9,7 @@ import Tonight from './components/Tonight.jsx';
 import { Avatar, Notice } from './components/ui.jsx';
 import { applyUpdate, watchForUpdates } from './lib/autoUpdate.js';
 import { hasFirebase, pref } from './lib/config.js';
-import { connect } from './lib/firebase.js';
+import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js';
 import { createLocalStore, createSharedStore } from './lib/store.js';
 import { enrich } from './lib/tmdb.js';
 
@@ -23,22 +23,48 @@ const TABS = [
 const store = hasFirebase ? createSharedStore() : createLocalStore();
 
 export default function App() {
-  const [ready, setReady] = useState(!hasFirebase); // the shared store needs a connection first
+  const [session, setSession] = useState(null); // the Firebase user; null until connected (or always, on-device)
   const [data, setData] = useState(null);
   const [problem, setProblem] = useState('');
-  const [me, setMe] = useState(() => pref.get('me', null)); // which name this device is using
+  const [picked, setPicked] = useState(() => pref.get('me', null)); // the name chosen on this device
   const [tab, setTab] = useState('tonight');
   const [showGroup, setShowGroup] = useState(false);
   const [open, setOpen] = useState(null);
   const [updateReady, setUpdateReady] = useState(false);
+  const [signInError, setSignInError] = useState('');
+  const linkAfterSignIn = useRef(null); // a name to link once the Google popup finishes
 
+  const ready = !hasFirebase || Boolean(session);
   useEffect(() => watchForUpdates(() => setUpdateReady(true)), []);
-  useEffect(() => {
-    if (hasFirebase) connect().then(() => setReady(true)).catch((e) => setProblem(explain(e)));
-  }, []);
+  useEffect(() => (hasFirebase ? watchSession(setSession, (e) => setProblem(explain(e))) : undefined), []);
   useEffect(() => (ready ? store.subscribe(setData, (e) => setProblem(explain(e))) : undefined), [ready]);
 
-  const choose = (id) => { setMe(id); pref.set('me', id); setShowGroup(false); };
+  const choose = (id) => { setPicked(id); pref.set('me', id); setShowGroup(false); };
+  const googleUid = session && !session.isAnonymous ? session.uid : null;
+  const members = data?.members || [];
+  const linked = googleUid ? members.find((m) => m.uid === googleUid) : null;
+  // Signed in with Google: you are the name linked to that account. Otherwise: the name picked
+  // on this device, unless someone has since linked it to a Google account.
+  const me = googleUid ? linked?.id || null : members.find((m) => m.id === picked && !m.uid)?.id || null;
+
+  // "Link my Google account" was tapped from inside a name: finish the link once signed in.
+  useEffect(() => {
+    if (!googleUid || !data || !linkAfterSignIn.current) return;
+    const target = members.find((m) => m.id === linkAfterSignIn.current);
+    linkAfterSignIn.current = null;
+    if (!linked && target && !target.uid) store.linkMember(target.id, googleUid);
+  }, [googleUid, data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const google = async (linkId = null) => {
+    setSignInError('');
+    linkAfterSignIn.current = linkId;
+    try { await signInWithGoogle(); } catch (e) {
+      linkAfterSignIn.current = null;
+      if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return;
+      setSignInError(explain(e));
+    }
+  };
+  const signOut = () => { setShowGroup(false); signOutGoogle(); };
 
   const rate = useCallback((movie, rating) => {
     store.setRating(movie, me, rating);
@@ -51,9 +77,20 @@ export default function App() {
   if (problem) return <Shell><div className="mx-auto max-w-md py-10"><Notice>{problem}</Notice></div></Shell>;
   if (!data) return <Shell><Centered>Loading…</Centered></Shell>;
 
-  const { members, entries, shortlist } = data;
+  const { entries, shortlist } = data;
   const myself = members.find((m) => m.id === me);
-  if (!myself) return <Shell><WhoAreYou members={members} onPick={choose} onAdd={(name) => choose(store.addMember(name))} /></Shell>;
+  if (!myself) {
+    return (
+      <Shell>
+        <WhoAreYou
+          members={members} googleUid={googleUid} canGoogle={hasFirebase} error={signInError}
+          onGoogle={() => google()} onSignOut={signOut}
+          onPick={(id) => (googleUid ? store.linkMember(id, googleUid) : choose(id))}
+          onAdd={(name) => { const id = store.addMember(name, googleUid); if (!googleUid) choose(id); }}
+        />
+      </Shell>
+    );
+  }
 
   const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
   const toggleListed = (movie) => store.setShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
@@ -94,7 +131,9 @@ export default function App() {
       {showGroup ? (
         <Group
           members={members} me={me}
+          canGoogle={hasFirebase} googleUid={googleUid} error={signInError}
           onSwitch={() => choose(null)} onAdd={(name) => store.addMember(name)} onRemove={(id) => store.removeMember(id)}
+          onLink={() => google(me)} onUnlink={() => { store.linkMember(me, null); choose(me); signOutGoogle(); }} onSignOut={signOut}
         />
       ) : (
         <>
@@ -114,39 +153,90 @@ export default function App() {
 
 function explain(e) {
   if (e?.code === 'permission-denied') return 'The database refused access. Publish the rules from firestore.rules in the Firebase console (README, step 4).';
-  if (e?.code === 'auth/operation-not-allowed' || e?.code === 'auth/admin-restricted-operation') return 'Anonymous sign-in is switched off in Firebase. Turn it on under Authentication → Sign-in method → Anonymous (README, step 3).';
+  if (e?.code === 'auth/admin-restricted-operation') return 'Anonymous sign-in is switched off in Firebase. Turn it on under Authentication → Sign-in method → Anonymous (README, step 3).';
+  if (e?.code === 'auth/operation-not-allowed') return 'That sign-in method is switched off in Firebase. Turn it on under Authentication → Sign-in method.';
+  if (e?.code === 'auth/unauthorized-domain') return `Google sign-in isn't allowed from this address yet. In Firebase, go to Authentication → Settings → Authorized domains and add ${window.location.hostname}.`;
+  if (e?.code === 'auth/popup-blocked') return 'The sign-in window was blocked. Allow pop-ups for this site, or open it in Safari or Chrome instead of from the home screen.';
   return e?.message || 'Something went wrong talking to the database.';
 }
 
-/** The front door: pick your name, or type it if you're new. */
-function WhoAreYou({ members, onPick, onAdd }) {
+/**
+ * The front door.
+ *   Not signed in with Google: pick your name, type a new one, or sign in with Google.
+ *   Signed in with Google but not linked to a name yet: say which existing name is yours
+ *   (your ratings come with it), or start fresh.
+ */
+function WhoAreYou({ members, googleUid, canGoogle, error, onGoogle, onSignOut, onPick, onAdd }) {
   const [name, setName] = useState('');
   const submit = (e) => { e.preventDefault(); if (name.trim()) onAdd(name); };
+  const free = members.filter((m) => !m.uid);
+  const taken = members.filter((m) => m.uid);
+  const claiming = Boolean(googleUid);
+
   return (
     <div className="mx-auto flex max-w-sm flex-col gap-6 py-8">
-      <h2 className="text-2xl font-bold text-cream">{members.length ? "Who's this?" : 'Welcome'}</h2>
-      {members.length > 0 && (
+      <div className="flex flex-col gap-1">
+        <h2 className="text-2xl font-bold text-cream">{claiming ? 'Which one is you?' : members.length ? "Who's this?" : 'Welcome'}</h2>
+        {claiming && <p className="text-sm text-dim">You're signed in with Google. Pick your existing name and everything you've rated comes with it. From then on, signing in with Google opens straight into it on any device.</p>}
+      </div>
+      {error && <Notice>{error}</Notice>}
+
+      {free.length > 0 && (
         <ul className="flex flex-col gap-2">
-          {members.map((m) => (
+          {free.map((m) => (
             <li key={m.id}>
               <button type="button" onClick={() => onPick(m.id)} className="flex w-full items-center gap-3 rounded-xl bg-seat px-3 py-3 text-left text-lg font-bold text-cream transition hover:bg-aisle">
                 <Avatar member={m} size={40} />
-                {m.name}
+                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                {claiming && <span className="text-xs font-normal text-gold">That's me</span>}
               </button>
             </li>
           ))}
         </ul>
       )}
+
+      {!claiming && taken.length > 0 && (
+        <ul className="flex flex-col gap-2">
+          {taken.map((m) => (
+            <li key={m.id}>
+              <button type="button" onClick={onGoogle} className="flex w-full items-center gap-3 rounded-xl border border-aisle px-3 py-3 text-left text-lg font-bold text-cream transition hover:bg-seat">
+                <Avatar member={m} size={40} />
+                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                <span className="inline-flex items-center gap-1.5 text-xs font-normal text-dim"><GoogleG /> Sign in</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <form onSubmit={submit} className="flex flex-col gap-3">
-        <label htmlFor="new-name" className="text-sm text-dim">{members.length ? 'Not on the list? Add your name.' : "Type your name to get started. Next time you'll just pick it from a list."}</label>
+        <label htmlFor="new-name" className="text-sm text-dim">{claiming ? 'New here? Add your name.' : members.length ? 'Not on the list? Add your name.' : "Type your name to get started. Next time you'll just pick it from a list."}</label>
         <div className="flex gap-2">
           <input id="new-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="Your name" autoComplete="off" autoFocus={!members.length} className="min-w-0 flex-1 rounded-lg border border-aisle bg-seat px-3 py-3 text-lg text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
           <button type="submit" disabled={!name.trim()} className="rounded-lg bg-velvet px-5 py-3 font-bold text-cream disabled:bg-aisle disabled:text-dim">Go</button>
         </div>
       </form>
+
+      {canGoogle && (claiming
+        ? <button type="button" onClick={onSignOut} className="self-start text-sm text-dim underline">Sign out of Google</button>
+        : (
+          <div className="flex flex-col gap-2 border-t border-aisle pt-5">
+            <button type="button" onClick={onGoogle} className="flex w-full items-center justify-center gap-3 rounded-lg bg-cream px-4 py-3 font-bold text-house hover:brightness-95"><GoogleG /> Sign in with Google</button>
+            <p className="text-xs text-dim">Optional. It ties your name to your Google account, so nobody else can pick it and it follows you to any device.</p>
+          </div>
+        ))}
     </div>
   );
 }
+
+export const GoogleG = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" className="shrink-0">
+    <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.2C12.4 13.6 17.7 9.5 24 9.5z" />
+    <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z" />
+    <path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.9-6.2z" />
+    <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.2 1.5-5 2.3-8.2 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z" />
+  </svg>
+);
 
 /** Slim header with the wordmark, a scrolling column, optional bottom nav. */
 function Shell({ children, right, nav }) {

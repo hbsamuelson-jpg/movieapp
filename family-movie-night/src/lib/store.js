@@ -2,6 +2,7 @@
 //   subscribe(cb, onError)   -> unsubscribe;  cb({ members, entries, shortlist })
 //   addMember(name)          -> the new (or existing, if the name is taken) member id
 //   removeMember(id)
+//   linkMember(id, uid | null)   tie a name to a Google account, or untie it
 //   setRating(movie, memberId, rating | null)
 //   updateMovie(movie)       refresh stored movie details
 //   setShortlist(movies)     tonight's shortlist
@@ -46,6 +47,7 @@ export function createLocalStore() {
     removeMember(id) {
       commit({ ...state, members: state.members.filter((m) => m.id !== id) });
     },
+    linkMember() { /* Google linking needs the shared store */ },
     setRating(movie, memberId, rating) {
       const id = String(movie.id);
       const prev = state.entries[id] || { movie, ratings: {} };
@@ -82,7 +84,7 @@ export function createSharedStore(spaceId = 'family') {
       const emit = () => head && entries && cb({ ...head, entries });
       const stopSpace = onSnapshot(space, (snap) => {
         const data = snap.data() || {}; // no document yet: nobody has added a name
-        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone' })).sort(byName);
+        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null })).sort(byName);
         head = { members, shortlist: data.shortlist || [] };
         emit();
       }, onError);
@@ -96,12 +98,20 @@ export function createSharedStore(spaceId = 'family') {
       }, onError);
       return () => { stopSpace(); stopMovies(); };
     },
-    addMember(name) {
-      const existing = members.find((m) => sameName(m.name, name));
-      if (existing) return existing.id;
+    addMember(name, uid = null) {
+      // A name that already exists is reused only if nobody has linked it to a Google account.
+      const existing = members.find((m) => sameName(m.name, name) && !m.uid);
+      if (existing) {
+        if (uid) this.linkMember(existing.id, uid);
+        return existing.id;
+      }
       const id = newId();
-      setDoc(space, { members: { [id]: { name: name.trim(), joinedAt: serverTimestamp() } } }, { merge: true });
+      setDoc(space, { members: { [id]: { name: name.trim(), joinedAt: serverTimestamp(), ...(uid ? { uid } : {}) } } }, { merge: true });
       return id;
+    },
+    /** Ratings are stored under the member id, so linking moves nothing: the name just gains an owner. */
+    linkMember(id, uid) {
+      return setDoc(space, { members: { [id]: { uid: uid || deleteField() } } }, { merge: true });
     },
     removeMember(id) {
       return setDoc(space, { members: { [id]: deleteField() } }, { merge: true });

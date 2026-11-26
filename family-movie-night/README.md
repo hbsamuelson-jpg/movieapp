@@ -51,12 +51,12 @@ With only this key set you get real posters and every movie, but names and ratin
 | `projectId` | `VITE_FIREBASE_PROJECT_ID` |
 | `appId` | `VITE_FIREBASE_APP_ID` |
 
-### 3. Turn on anonymous sign-in
+### 3. Turn on sign-in
 
-Nobody signs in by hand. The app quietly gives each device an anonymous session so the database only talks to the app.
-
-1. In the Firebase console: **Build → Authentication → Get started**.
-2. **Sign-in method → Anonymous → Enable → Save**.
+1. In the Firebase console: **Authentication → Get started → Sign-in method**.
+2. Enable **Anonymous**. This is what lets people use the app with just a name: each device gets a quiet session so the database only talks to the app.
+3. Enable **Google** (optional). This lets someone link their name to a Google account.
+4. For Google sign-in, go to **Authentication → Settings → Authorized domains** and add your site's address (for example `movieapp-chi-roan.vercel.app`).
 
 ### 4. Create the database and lock it down
 
@@ -117,7 +117,9 @@ Run `npm run deploy` again whenever you change something. `firebase.json` is alr
 
 ### People
 
-There are no accounts, roles or passwords. The first time someone opens the site they type their name. After that the site opens with a list of names to pick from, and each device remembers who used it last. Tap the avatars in the top right to switch person, add a name, or remove one.
+There are no roles. The first time someone opens the site they type their name. After that the site opens with a list of names to pick from, and each device remembers who used it last. Tap the avatars in the top right to switch person, add a name, or remove one.
+
+**Google sign-in is optional.** Anyone can link their existing name to a Google account, either from the avatar page ("Link my Google account") or by signing in with Google on the front page and tapping their name. Nothing is copied or moved: ratings are stored under the name's id, so they stay exactly as they were. Once linked, signing in with Google on any device opens straight into that name, and the name can no longer be picked without signing in. Names that aren't linked keep working as before.
 
 Everyone who opens the site shares one space: the same names, ratings and shortlist.
 
@@ -172,7 +174,7 @@ People who aren't watching tonight don't count, including their vetoes.
 ```
 groups/family                         ← the one shared space for this site
   members: {
-    "k3x9q2ab": { name: "Couper", joinedAt: timestamp },
+    "k3x9q2ab": { name: "Couper", joinedAt: timestamp, uid: "<Google uid>" },  // uid only if linked
     "p7m1zz0c": { name: "Henry",  joinedAt: timestamp }
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
@@ -209,7 +211,7 @@ src/
   index.css                 theme tokens and animations
   lib/
     config.js               reads .env, small on-device preferences
-    firebase.js             Firebase setup and the silent anonymous session
+    firebase.js             Firebase setup, the quiet anonymous session, optional Google sign-in
     store.js                on-device store and shared store, same interface
     tmdb.js                 top-of-year decks, eras, similar movies, varied picks, search, details
     suggest.js              taste profiles and suggestions (pure functions)

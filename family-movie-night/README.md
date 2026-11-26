@@ -167,7 +167,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
   - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
   - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, with everyone's vetoes still applied.
 
-  Put movies on the shared shortlist with **+**, then choose together or **Spin**. Filters (MPAA rating, genre, runtime) are behind the Filters button.
+  Put movies on the shared shortlist with **+**, then choose together, **Spin**, or hold a **Secret vote** (below). Filters (MPAA rating, genre, runtime) are behind the Filters button.
 - **Rate** — two modes, switched at the top:
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
   - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
@@ -187,6 +187,10 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 ### Taste and suggestions (`src/lib/suggest.js`)
 
 **Taste.** For each person the app averages their stars per category, pulled toward their overall average until a category has a few ratings. For a movie they haven't rated it predicts their stars from those category scores, blended with the TMDB audience score. The more they rate, the more weight their own taste gets (up to 70% after 30 ratings).
+
+**Secret vote.** With two or more movies on the shortlist, anyone can start a vote. Everyone marked as watching gets a ballot on their own device (a red dot appears on the Tonight tab) and picks one movie. Totals stay hidden until everyone has voted or someone taps "End vote now"; then the winner and the counts show for everybody. A tie offers "Spin the tie". Votes can be changed until the result shows.
+
+It is anonymous by construction: the app stores who has voted and how many votes each movie has as two separate things, updated together, so nothing saved says who chose what. Each device remembers its own choice only so that person can change it.
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
@@ -226,6 +230,13 @@ groups/family                         ← the one shared space for this site
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
   ai: { day: "2026-11-26", count: 7 }     // assistant questions asked today
+  vote: {                               // the current secret vote, if any
+    id: "x1y2z3", open: true,
+    options: [ { id, title, year, poster }, … ],
+    voters: [ "k3x9q2ab", "p7m1zz0c" ],  // who gets a ballot
+    voted:  [ "k3x9q2ab" ],              // who has cast one (not what they chose)
+    tally:  { "105": 1 }                 // votes per movie id
+  }
 
 groups/family/movies/{tmdbId}         ← one document per movie anyone has rated
   movie: {
@@ -279,6 +290,7 @@ src/
     Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
     Ask.jsx                 the assistant chat
+    Vote.jsx                the secret vote panel and result
     Rank.jsx                Rank 5: kick the unseen, order the rest, submit
     Browse.jsx              search for movies, or for directors and writers
     Mine.jsx                your favourites, taste summary and ratings

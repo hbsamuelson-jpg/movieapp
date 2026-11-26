@@ -1,6 +1,6 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { liking, quality, qualityNudge, shownStars, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { voteResult, liking, quality, qualityNudge, shownStars, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -131,4 +131,15 @@ assert.deepEqual(order.map((e) => e.movie.title), ['Acclaimed', 'Panned'], 'equa
 assert.ok(order[0].rank - order[1].rank <= 8, 'but only by a little');
 // A panned movie someone wants still beats an acclaimed one nobody asked for... which is not listed at all.
 assert.ok(suggest({ 1: twins[2], 2: { movie: { ...movie(3, 'Great Unasked', ['Drama']), rt: 99 }, ratings: { q: seen(4) } } }, ['q']).every((e) => e.movie.title === 'Panned'));
+
+// Votes: a clear winner, a tie, and nobody voting.
+const options = [movie(1, 'One'), movie(2, 'Two'), movie(3, 'Three')];
+const won = voteResult({ options, voters: ['a', 'b', 'c'], voted: ['a', 'b', 'c'], tally: { 2: 2, 3: 1 } });
+assert.deepEqual(won.winners.map((m) => m.title), ['Two']);
+assert.equal(won.everyoneIn, true);
+assert.deepEqual(won.rows.map((r) => r.votes), [2, 1, 0]);
+const tied = voteResult({ options, voters: ['a', 'b', 'c'], voted: ['a', 'b'], tally: { 1: 1, 3: 1 } });
+assert.equal(tied.winners.length, 2);
+assert.equal(tied.everyoneIn, false);
+assert.equal(voteResult({ options, voters: ['a'], voted: [], tally: {} }).winners.length, 0);
 console.log('\nAll suggestion checks passed.');

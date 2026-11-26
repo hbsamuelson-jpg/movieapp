@@ -91,7 +91,7 @@ export default function App() {
   if (problem) return <Shell><div className="mx-auto max-w-md py-10"><Notice>{problem}</Notice></div></Shell>;
   if (!data) return <Shell><Centered>Loading…</Centered></Shell>;
 
-  const { entries, shortlist } = data;
+  const { entries, shortlist, vote } = data;
   const myself = members.find((m) => m.id === me);
   if (!myself) {
     return (
@@ -124,6 +124,14 @@ export default function App() {
     store.setFavorites(me, favorites.filter((m) => String(m.id) !== String(movie.id)));
     if (entries[movie.id]?.ratings?.[me]?.via === 'favorite') store.setRating(movie, me, null);
   };
+  const voting = {
+    start: (movies, voters) => store.startVote(movies, voters),
+    cast: (movieId, previous) => store.castVote(me, movieId, previous),
+    end: () => store.endVote(),
+    clear: () => store.clearVote(),
+  };
+  // A dot on the Tonight tab when there's an open vote you haven't cast yet.
+  const voteWaiting = Boolean(vote?.open && vote.voters.includes(me) && !vote.voted.includes(me));
   const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
   const toggleListed = (movie) => store.setShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
   const go = (id) => { setTab(id); setShowGroup(false); };
@@ -145,7 +153,10 @@ export default function App() {
               const on = tab === t.id && !showGroup;
               return (
                 <button key={t.id} type="button" aria-current={on ? 'page' : undefined} onClick={() => go(t.id)} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-bold transition ${on ? 'text-gold' : 'text-dim hover:text-cream'}`}>
-                  <t.icon size={21} />
+                  <span className="relative">
+                    <t.icon size={21} />
+                    {t.id === 'tonight' && voteWaiting && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-velvet ring-2 ring-house" aria-label="A vote is waiting for you" />}
+                  </span>
                   {t.label}
                 </button>
               );
@@ -169,7 +180,7 @@ export default function App() {
         />
       ) : (
         <>
-          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} onOpen={setOpen} onRate={() => go('rate')} />}
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}

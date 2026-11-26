@@ -215,6 +215,18 @@ export function rankToLiking(count, flagged = []) {
   return Array.from({ length: count }, (_, n) => (flagged[n] ? 1.5 : values[Math.min(n, values.length - 1)]));
 }
 
+/**
+ * Read a vote: counts per option (most votes first), how many have voted, and the winner(s).
+ * `winners` has more than one movie when there's a tie, and none if nobody voted.
+ */
+export function voteResult(vote) {
+  const rows = vote.options.map((movie) => ({ movie, votes: Math.max(0, vote.tally?.[movie.id] || 0) })).sort((a, b) => b.votes - a.votes);
+  const top = rows[0]?.votes || 0;
+  const cast = (vote.voted || []).length;
+  const expected = (vote.voters || []).length;
+  return { rows, cast, expected, everyoneIn: expected > 0 && (vote.voters || []).every((id) => (vote.voted || []).includes(id)), winners: top > 0 ? rows.filter((r) => r.votes === top).map((r) => r.movie) : [] };
+}
+
 /** filters: { genre: string | '', certs: string[], maxRuntime: number | 0 } */
 export function applyFilters(list, filters) {
   return list.filter(({ movie }) => {

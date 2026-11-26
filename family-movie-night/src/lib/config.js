@@ -19,6 +19,9 @@ export const hasTmdb = Boolean(tmdbKey);
 export const omdbKey = env.VITE_OMDB_API_KEY || '';
 export const hasOmdb = Boolean(omdbKey);
 
+/** Which shared space this site uses. Leave unset; a different value gives a separate, empty space (handy for testing). */
+export const spaceId = env.VITE_SPACE_ID || 'family';
+
 export const CERTS = ['G', 'PG', 'PG-13', 'R'];
 
 export const pref = {

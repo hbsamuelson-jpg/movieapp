@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Dices, Plus, SlidersHorizontal, X } from 'lucide-react';
+import { Check, ChevronDown, Dices, Plus, SlidersHorizontal, Vote as VoteIcon, X } from 'lucide-react';
 import { CERTS } from '../lib/config.js';
 import { applyFilters, mergeSimilar, suggest } from '../lib/suggest.js';
 import { discover, interestSeeds } from '../lib/discover.js';
 import { enrich, GENRE_CHOICES, similarTo } from '../lib/tmdb.js';
 import MoviePicker from './MoviePicker.jsx';
+import Vote from './Vote.jsx';
 import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, Poster } from './ui.jsx';
 
 const RUNTIMES = [[0, 'Any length'], [90, '90 min or less'], [105, '1h 45m or less'], [120, '2 hours or less']];
 
 /** Who's here, what the app suggests for them, and the shortlist you put up for a choice or a spin. */
-export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, onOpen, onRate }) {
+export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, onOpen, onRate }) {
   const [filters, setFilters] = useState({ genre: '', certs: [], maxRuntime: 0 });
   const [showFilters, setShowFilters] = useState(false);
-  const [spinning, setSpinning] = useState(false);
+  const [spinning, setSpinning] = useState(null); // the movies being spun, or null
   const [vibes, setVibes] = useState([]); // tonight's priority genres: boosted, never a hard filter
   const [seeds, setSeeds] = useState([]); // "movies like…" reference movies
   const [simLists, setSimLists] = useState({}); // seed id -> [{ movie, sim }]
@@ -95,6 +96,15 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
 
   return (
     <div className="flex flex-col gap-6">
+      {vote && (
+        <Vote
+          key={`${vote.id}:${me}`} vote={vote} members={members} me={me}
+          onCast={(movieId, previous) => voting.cast(movieId, previous)} onEnd={voting.end} onClear={voting.clear}
+          onRevote={() => voting.start(vote.options, vote.voters)} onSpin={(pool) => setSpinning(pool)}
+          onOpen={(m) => onOpen(entries[m.id]?.movie || m)}
+        />
+      )}
+
       {members.length > 1 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Who's watching tonight</h2>
@@ -142,9 +152,15 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
             ))}
           </ul>
         )}
-        <button type="button" disabled={spinPool.length < 2} onClick={() => setSpinning(true)} className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-4 py-2.5 font-bold text-house transition hover:brightness-110 disabled:bg-aisle disabled:text-dim">
-          <Dices size={19} /> {shortlist.length >= 2 ? `Spin the shortlist` : 'Spin the top suggestions'}
-        </button>
+        <div className="mt-1 grid grid-cols-2 gap-2">
+          <button type="button" disabled={spinPool.length < 2} onClick={() => setSpinning(spinPool)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-gold px-3 py-2.5 font-bold text-house transition hover:brightness-110 disabled:bg-aisle disabled:text-dim">
+            <Dices size={19} /> {shortlist.length >= 2 ? 'Spin' : 'Spin top picks'}
+          </button>
+          <button type="button" disabled={shortlist.length < 2 || Boolean(vote)} onClick={() => voting.start(shortlist, presentIds)} className="inline-flex items-center justify-center gap-2 rounded-lg border border-gold px-3 py-2.5 font-bold text-gold transition hover:bg-gold/10 disabled:border-aisle disabled:text-dim">
+            <VoteIcon size={19} /> Secret vote
+          </button>
+        </div>
+        {shortlist.length < 2 && !vote && <p className="text-xs text-dim">Put at least two movies on the shortlist to vote on them.</p>}
       </section>
 
       <section className="flex flex-col gap-3">
@@ -192,7 +208,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         )}
       </section>
 
-      {spinning && <SpinReel pool={spinPool} onClose={() => setSpinning(false)} onOpen={(m) => { setSpinning(false); onOpen(m); }} />}
+      {spinning && <SpinReel pool={spinning} onClose={() => setSpinning(null)} onOpen={(m) => { setSpinning(null); onOpen(m); }} />}
     </div>
   );
 }

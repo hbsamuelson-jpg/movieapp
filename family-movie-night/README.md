@@ -208,7 +208,7 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Movie page extras.** **Trailer** opens the official trailer on YouTube (or a YouTube search when TMDB has none). **Where to watch** shows, for the US: **Free** (free services, usually with ads, or free with a library card such as Kanopy and Hoopla), **Included with** (subscription services), or the stores that rent or sell it. The data comes from JustWatch through TMDB, is refreshed every two weeks and can lag. It says which services carry a movie but not what they charge, so there are no prices in the app; **Compare rental prices** opens JustWatch, which lists them. Service names are shown as text. Add-on channels are folded into the service ("AMC+ Amazon Channel" counts as AMC+).
 
-**Number keys.** On a computer, on the Quick Swipe card and on a movie's page: **1–5** sets that many stars, the **same key again** takes half a star off (4, 4 → 3½), **0** or Backspace clears, **Enter** saves (on Quick Swipe that also moves to the next movie). Keys are ignored while you're typing in a search box.
+**Number keys.** On a computer, on the Quick Swipe card and on a movie's page: **1–5** sets that many stars, the **same key again** takes half a star off (4, 4 → 3½), **0** or Backspace clears. **Enter** on Quick Swipe goes to the next movie: with 3 stars or more it saves the movie as "would watch again", with 2½ or fewer as plain watched, and with no stars it skips. On a movie's page, Enter saves what's selected. Keys are ignored while you're typing in a search box.
 
 **Bigger, bolder text.** A switch under People and settings (tap the avatars, top right). It makes all text about 20% larger and heavier and is remembered per device.
 

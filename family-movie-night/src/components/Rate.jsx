@@ -101,7 +101,8 @@ function QuickSwipe({ entries, me, onRate }) {
     if (last.movie.year && last.movie.year !== year && years.includes(last.movie.year)) setYear(last.movie.year);
   };
   // Number keys rate the movie on screen (not while a movie's detail sheet is open on top).
-  useStarKeys({ stars, onStars: setStars, onSave: () => movie && commit({ status: 'seen', stars }), enabled: Boolean(movie) && !document.querySelector('[role="dialog"]') });
+  useStarKeys({ stars, onStars: setStars, // Enter moves on: 3 stars or more is saved as "would watch again", fewer as plain watched, none skips.
+    onSave: () => { if (!movie) return; if (stars > 0) commit({ status: stars > 2.5 ? 'again' : 'seen', stars }); else advance(false); }, enabled: Boolean(movie) && !document.querySelector('[role="dialog"]') });
   const toggle = (list, set) => (value) => set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
   const toggleGenre = toggle(genres, setGenres);
   const toggleEra = toggle(eras, setEras);
@@ -174,9 +175,10 @@ function QuickSwipe({ entries, me, onRate }) {
               <div className="grid w-full grid-cols-2 gap-2">
                 <button type="button" onClick={() => commit({ status: 'seen', stars })} className="rounded-lg bg-aisle px-3 py-3 font-bold text-cream">Save {stars}★</button>
                 <button type="button" onClick={() => commit({ status: 'again', stars })} className="rounded-lg bg-gold px-3 py-3 font-bold text-house">Save + watch again</button>
+                <span className="col-span-2 text-center"><KeyHint>{stars > 2.5 ? 'Enter saves it as "watch again" and goes to the next movie.' : 'Enter saves it as watched and goes to the next movie.'}</KeyHint></span>
               </div>
             ) : (
-              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint /></>
+              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint>Keyboard: 1–5 for stars, the same key again for half a star less, Enter for the next movie.</KeyHint></>
             )}
           </div>
 

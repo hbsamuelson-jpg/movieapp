@@ -34,7 +34,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
   const save = () => { onSave(movie, { status, stars: watched ? stars : null }); onClose(); };
   const clear = () => { onSave(movie, null); onClose(); };
   const others = members.filter((m) => m.id !== me);
-  useStarKeys({ stars, onStars: (v) => (v > 0 ? pickStars(v) : setStars(0)), onSave: save });
+  useStarKeys({ stars, onStars: (v) => (v > 0 ? pickStars(v) : setStars(0)), onSave: () => canSave && save() });
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center sm:p-6" onClick={onClose}>

@@ -3,7 +3,7 @@ import { ChevronDown, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { hasTmdb, pref } from '../lib/config.js';
 import { enrich, ERAS, GENRE_CHOICES, topOfYear, yearsFor } from '../lib/tmdb.js';
 import Rank from './Rank.jsx';
-import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink } from './ui.jsx';
+import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink, KeyHint, useStarKeys } from './ui.jsx';
 
 const PER_YEAR = [5, 10, 20];
 const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank 5']];
@@ -13,7 +13,7 @@ export default function Rate({ entries, me, onRate }) {
   const [mode, setMode] = useState(() => pref.get('rate-mode', 'swipe'));
   const choose = (m) => { setMode(m); pref.set('rate-mode', m); };
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="mx-auto flex max-w-md flex-col gap-4 lg:max-w-4xl">
       <div className="grid grid-cols-2 gap-1 rounded-full bg-seat p-1" role="tablist" aria-label="Rating mode">
         {MODES.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => choose(id)} className={`rounded-full py-2 text-sm font-bold transition ${mode === id ? 'bg-gold text-house' : 'text-dim hover:text-cream'}`}>{label}</button>
@@ -100,6 +100,8 @@ function QuickSwipe({ entries, me, onRate }) {
     setStars(0);
     if (last.movie.year && last.movie.year !== year && years.includes(last.movie.year)) setYear(last.movie.year);
   };
+  // Number keys rate the movie on screen (not while a movie's detail sheet is open on top).
+  useStarKeys({ stars, onStars: setStars, onSave: () => movie && commit({ status: 'seen', stars }), enabled: Boolean(movie) && !document.querySelector('[role="dialog"]') });
   const toggle = (list, set) => (value) => set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
   const toggleGenre = toggle(genres, setGenres);
   const toggleEra = toggle(eras, setEras);
@@ -152,8 +154,9 @@ function QuickSwipe({ entries, me, onRate }) {
       {!finished && !movie && !error && <p className="py-16 text-center text-sm text-dim">Loading {year}…</p>}
 
       {movie && (
-        <div key={movie.id} className="card-in flex flex-col items-center gap-4">
-          <div className="w-44"><Poster movie={movie} size="w500" className="shadow-xl shadow-black/60" /></div>
+        <div key={movie.id} className="card-in flex flex-col items-center gap-4 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-center lg:gap-10">
+          <div className="w-44 lg:w-full"><Poster movie={movie} size="w500" className="shadow-xl shadow-black/60" /></div>
+          <div className="flex w-full flex-col items-center gap-4">
           <div className="flex flex-col items-center gap-1 text-center">
             <h2 className="text-xl font-bold leading-tight text-cream"><TitleLink movie={movie} /></h2>
             <ScoreBadge movie={movie} size="lg" className="my-1" />
@@ -173,7 +176,7 @@ function QuickSwipe({ entries, me, onRate }) {
                 <button type="button" onClick={() => commit({ status: 'again', stars })} className="rounded-lg bg-gold px-3 py-3 font-bold text-house">Save + watch again</button>
               </div>
             ) : (
-              <span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span>
+              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint /></>
             )}
           </div>
 
@@ -191,6 +194,7 @@ function QuickSwipe({ entries, me, onRate }) {
           <div className="-mt-2 text-xs text-dim">{stars > 0 ? <>You've given it stars. <button type="button" onClick={() => setStars(0)} className="font-bold text-cream underline">Clear stars</button> to pick one of these instead.</> : "Haven't watched it? Pick one of these."}</div>
 
           <button type="button" onClick={() => advance(false)} className="px-4 py-1 text-sm text-dim underline">Skip for now</button>
+          </div>
         </div>
       )}
     </>

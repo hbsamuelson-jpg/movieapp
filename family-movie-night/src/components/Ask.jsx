@@ -51,7 +51,7 @@ export default function Ask({ entries, members, me, present, onTogglePresent, sh
   };
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <div className="mx-auto flex max-w-md flex-col gap-4 lg:max-w-3xl">
       {members.length > 1 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Asking for</h2>

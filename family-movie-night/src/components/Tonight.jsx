@@ -145,6 +145,9 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         />
       )}
 
+      {/* On a computer: controls and shortlist on the left, the suggestions on the right. */}
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[24rem_minmax(0,1fr)] lg:items-start lg:gap-10">
+      <div className="flex min-w-0 flex-col gap-6">
       {members.length > 1 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Who's watching tonight</h2>
@@ -215,6 +218,8 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         {shortlist.length < 2 && !vote && <p className="text-xs text-dim">Put at least two movies on the shortlist to vote on them.</p>}
       </section>
 
+      </div>
+      <div className="flex min-w-0 flex-col gap-6">
       <section className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -275,6 +280,9 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
           )}
         </section>
       )}
+
+      </div>
+      </div>
 
       {spinning && (
         <SpinReel

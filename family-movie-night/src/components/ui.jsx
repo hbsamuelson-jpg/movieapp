@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown, ExternalLink } from 'lucide-react';
 import { quality, shownStars } from '../lib/suggest.js';
 import { posterUrl } from '../lib/tmdb.js';
@@ -148,6 +148,29 @@ export function ScoreBadge({ movie, size = 'sm', className = '' }) {
 }
 
 export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m` : null);
+
+/**
+ * Number keys for star ratings: 1–5 sets that many stars, the same key again takes half a star
+ * off (4, 4 → 3½), 0 or Backspace clears, Enter saves. Ignored while typing in a field, and
+ * `enabled` lets a screen stand down (e.g. while a sheet is open on top of it).
+ */
+export function useStarKeys({ stars, onStars, onSave, enabled = true }) {
+  const latest = useRef({});
+  latest.current = { stars, onStars, onSave, enabled };
+  useEffect(() => {
+    const onKey = (e) => {
+      const now = latest.current;
+      if (!now.enabled || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (/^(input|textarea|select)$/i.test(e.target?.tagName || '') || e.target?.isContentEditable) return;
+      if (/^[1-5]$/.test(e.key)) { const n = Number(e.key); now.onStars(now.stars === n ? n - 0.5 : n); e.preventDefault(); }
+      else if (e.key === '0' || e.key === 'Backspace') { if (now.stars) { now.onStars(0); e.preventDefault(); } }
+      else if (e.key === 'Enter' && now.stars > 0 && now.onSave) { now.onSave(); e.preventDefault(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}
+export const KeyHint = ({ children = 'Keyboard: 1–5 for stars, the same key again for half a star less, Enter to save.' }) => <span className="hidden text-xs text-dim md:block">{children}</span>;
 
 /* ---------- Rows ---------- */
 

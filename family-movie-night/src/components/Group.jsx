@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeftRight, Link2, X } from 'lucide-react';
-import { hasFirebase } from '../lib/config.js';
+import { hasFirebase, pref } from '../lib/config.js';
 import { applyUpdate, buildLabel } from '../lib/autoUpdate.js';
 import { Avatar, Notice } from './ui.jsx';
 
@@ -8,10 +8,12 @@ import { Avatar, Notice } from './ui.jsx';
 export default function Group({ members, me, canGoogle, googleUid, error, onSwitch, onAdd, onRemove, onLink, onUnlink, onSignOut }) {
   const [name, setName] = useState('');
   const [removing, setRemoving] = useState(null);
+  const [big, setBig] = useState(() => pref.get('big-text', false));
+  const toggleBig = () => { const next = !big; setBig(next); pref.set('big-text', next); document.documentElement.classList.toggle('big-text', next); };
   const add = (e) => { e.preventDefault(); if (name.trim()) { onAdd(name); setName(''); } };
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-5">
+    <div className="mx-auto flex max-w-md flex-col gap-5 lg:max-w-2xl">
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-cream">Who's in</h2>
@@ -39,6 +41,16 @@ export default function Group({ members, me, canGoogle, googleUid, error, onSwit
             ? 'Everyone who opens this site sees the same names and ratings. A name linked to a Google account can only be used by signing in; any other name can be picked by anyone with the link.'
             : 'Names and ratings are saved on this device only. To share them between phones, the site needs its Firebase keys (README, step 2).'}
         </p>
+      </section>
+
+      <section className="flex items-center justify-between gap-4 rounded-xl bg-seat p-4">
+        <div>
+          <h3 className="font-bold text-cream">Bigger, bolder text</h3>
+          <p className="text-sm text-dim">Makes everything larger and heavier. Saved on this device only.</p>
+        </div>
+        <button type="button" role="switch" aria-checked={big} aria-label="Bigger, bolder text" onClick={toggleBig} className={`relative h-8 w-14 shrink-0 rounded-full transition ${big ? 'bg-gold' : 'bg-aisle'}`}>
+          <span className={`absolute top-1 h-6 w-6 rounded-full bg-cream transition-all ${big ? 'left-7' : 'left-1'}`} />
+        </button>
       </section>
 
       {canGoogle && (

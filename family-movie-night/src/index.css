@@ -23,6 +23,10 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 h1, h2, h3 { text-wrap: balance; }
+/* "Bigger, bolder text" (People and settings): nearly every size in the app is relative to this. */
+html.big-text { font-size: 122%; }
+html.big-text body { font-weight: 600; }
+html.big-text .text-dim { color: color-mix(in srgb, var(--color-dim) 55%, var(--color-cream)); }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 :focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }

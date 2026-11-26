@@ -5,7 +5,7 @@ import { enrich, pricesUrl, trailerUrl } from '../lib/tmdb.js';
 
 const SNOOZE = 21 * 24 * 60 * 60 * 1000; // "not tonight" hides a movie for three weeks
 const day = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub, TitleLink } from './ui.jsx';
+import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub, TitleLink, KeyHint, useStarKeys } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
 export default function RateSheet({ movie: initial, entry, members, me, listed, snoozedUntil, onSnooze, onToggleListed, onWatched, onSave, onClose }) {
@@ -34,6 +34,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
   const save = () => { onSave(movie, { status, stars: watched ? stars : null }); onClose(); };
   const clear = () => { onSave(movie, null); onClose(); };
   const others = members.filter((m) => m.id !== me);
+  useStarKeys({ stars, onStars: (v) => (v > 0 ? pickStars(v) : setStars(0)), onSave: save });
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center sm:p-6" onClick={onClose}>
@@ -90,6 +91,7 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
           <div className="text-xs font-bold uppercase tracking-widest text-dim">Watched it</div>
           <div className={`flex flex-col items-center gap-3 rounded-xl bg-house p-4 ${watched ? 'ring-1 ring-gold' : ''}`}>
             <StarRating value={stars} onChange={pickStars} size={40} />
+            <KeyHint />
             <label className={`flex items-center gap-2 text-sm font-bold ${watched ? 'text-cream' : 'text-dim'}`}>
               <input id="watch-again" type="checkbox" className="h-4 w-4 accent-[#F5C518]" disabled={!watched} checked={status === 'again'} onChange={(e) => setStatus(e.target.checked ? 'again' : 'seen')} />
               Would watch again

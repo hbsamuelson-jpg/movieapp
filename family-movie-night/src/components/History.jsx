@@ -24,7 +24,7 @@ export default function History({ history, entries, members, me, onBack, onOpen,
         <p className="rounded-lg border border-dashed border-aisle p-5 text-sm text-dim">When you settle on a movie, tap "We're watching this" on the vote result or the spin, or "We watched this" on any movie's page. It lands here with the date and who was there.</p>
       )}
 
-      <ol className="flex flex-col gap-3">
+      <ol className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start">
         {nights.map((night) => {
           const entry = entries[night.movie.id];
           const movie = entry?.movie || night.movie;

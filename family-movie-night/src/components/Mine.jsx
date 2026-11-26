@@ -22,7 +22,8 @@ export default function Mine({ entries, members, me, onWant, onPass, favorites, 
   const people = taste.people.slice(0, 6);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-10">
+      <div className="flex min-w-0 flex-col gap-5">
       <ForYou entries={entries} members={members} me={me} onOpen={onOpen} onWant={onWant} onPass={onPass} />
 
       <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
@@ -73,8 +74,9 @@ export default function Mine({ entries, members, me, onWant, onPass, favorites, 
           </div>
         )}
       </section>
+      </div>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex min-w-0 flex-col gap-3">
         <h2 className="text-xl font-bold text-cream">My ratings</h2>
         <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
           {TABS.filter(([key]) => key === 'all' || key === tab || count(key) > 0).map(([key, label]) => (

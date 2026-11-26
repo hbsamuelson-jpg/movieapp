@@ -41,7 +41,7 @@ export default function Browse({ entries, members, onOpen }) {
   };
   const switchMode = (m) => { setMode(m); setResults([]); setPerson(null); setState(query.trim() ? 'loading' : 'idle'); };
   const rows = (list) => (
-    <ol className="-mx-2 flex flex-col divide-y divide-aisle/60">
+    <ol className="-mx-2 flex flex-col divide-y divide-aisle/60 lg:grid lg:grid-cols-2 lg:gap-x-8 lg:divide-y-0">
       {list.map((m) => <MovieRow key={m.id} movie={entries[m.id]?.movie || m} onOpen={onOpen} aside={<MemberDots entry={entries[m.id]} members={members} />} />)}
     </ol>
   );

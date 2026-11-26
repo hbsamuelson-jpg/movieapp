@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Heart, X } from 'lucide-react';
+import { Heart, Star, X } from 'lucide-react';
 import GenreRank from './GenreRank.jsx';
 import { liking, tasteProfile } from '../lib/suggest.js';
 import ForYou from './ForYou.jsx';
@@ -19,7 +19,9 @@ export default function Mine({ entries, members, me, genreRank, onGenreRank, onW
   const count = (key) => (key === 'all' ? mine.length : mine.filter((e) => e.ratings[me].status === key).length);
   const shown = tab === 'all' ? mine : mine.filter((e) => e.ratings[me].status === tab);
   const taste = useMemo(() => tasteProfile(entries, me), [entries, me, members]);
-  const top = taste.genres.filter((g) => g.n >= 2).slice(0, 6);
+  // `movies` is how many watched movies are behind each genre (a genre ranking adds weight but isn't a movie).
+  const top = taste.genres.map((g) => ({ ...g, movies: Math.round(g.n - (g.stated ? 4 : 0)) })).filter((g) => g.movies >= 2).slice(0, 6);
+  const most = Math.max(1, ...top.map((g) => g.movies));
   const people = taste.people.slice(0, 6);
 
   return (
@@ -57,15 +59,19 @@ export default function Mine({ entries, members, me, genreRank, onGenreRank, onW
         {taste.count < TASTE_MIN || !top.length ? (
           <p className="text-sm text-dim">Rate a few more movies you've watched, or add favourites above, and this fills in. The more it knows, the better the suggestions get.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {top.map((g) => (
-              <li key={g.name} className="grid grid-cols-[6.5rem_1fr_auto] items-center gap-3 text-sm">
-                <span className="truncate font-bold text-cream">{g.name}</span>
-                <span className="h-2 overflow-hidden rounded-full bg-aisle"><span className="block h-full rounded-full bg-gold" style={{ width: `${(g.score / 5) * 100}%` }} /></span>
-                <span className="tabular-nums text-dim">{g.n}</span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="flex flex-col gap-2">
+              {top.map((g) => (
+                <li key={g.name} className="grid grid-cols-[6.5rem_1fr_3.25rem_2.25rem] items-center gap-3 text-sm">
+                  <span className="truncate font-bold text-cream">{g.name}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-aisle" title={`${g.movies} movies`}><span className="block h-full rounded-full bg-gold" style={{ width: `${Math.max(2, (g.movies / most) * 100)}%` }} /></span>
+                  <span className="inline-flex items-center justify-end gap-1 tabular-nums text-cream"><Star size={12} className="text-gold" fill="currentColor" />{g.avg.toFixed(1)}</span>
+                  <span className="text-right tabular-nums text-dim">{g.movies}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-dim">Your favourite genres first. Bar length is how many of those movies you've watched (the number on the right); the star is how you rate them on average.</p>
+          </>
         )}
         {people.length > 0 && (
           <div className="flex flex-col gap-1.5 border-t border-aisle pt-3">

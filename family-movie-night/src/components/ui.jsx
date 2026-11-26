@@ -151,20 +151,22 @@ export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(
 
 /**
  * Number keys for star ratings: 1–5 sets that many stars, the same key again takes half a star
- * off (4, 4 → 3½), 0 or Backspace clears, Enter calls onSave (each screen decides what that
+ * off (4, 4 → 3½), 0 clears, Delete undoes, Enter calls onSave (each screen decides what that
  * means). Ignored while typing in a field, and
  * `enabled` lets a screen stand down (e.g. while a sheet is open on top of it).
  */
-export function useStarKeys({ stars, onStars, onSave, enabled = true }) {
+export function useStarKeys({ stars, onStars, onSave, onUndo, enabled = true }) {
   const latest = useRef({});
-  latest.current = { stars, onStars, onSave, enabled };
+  latest.current = { stars, onStars, onSave, onUndo, enabled };
   useEffect(() => {
     const onKey = (e) => {
       const now = latest.current;
       if (!now.enabled || e.metaKey || e.ctrlKey || e.altKey) return;
       if (/^(input|textarea|select)$/i.test(e.target?.tagName || '') || e.target?.isContentEditable) return;
       if (/^[1-5]$/.test(e.key)) { const n = Number(e.key); now.onStars(now.stars === n ? n - 0.5 : n); e.preventDefault(); }
-      else if (e.key === '0' || e.key === 'Backspace') { if (now.stars) { now.onStars(0); e.preventDefault(); } }
+      else if (e.key === '0') { if (now.stars) { now.onStars(0); e.preventDefault(); } }
+      // Delete (Backspace on a Mac keyboard) is undo: it takes back the stars just tapped, or, with none, the last movie.
+      else if (e.key === 'Backspace' || e.key === 'Delete') { if (now.stars) now.onStars(0); else if (now.onUndo) now.onUndo(); e.preventDefault(); }
       // Enter is taken even when a button has focus (you've usually just clicked a star or a tab); Space still presses buttons.
       else if (e.key === 'Enter' && now.onSave && !/^a$/i.test(e.target?.tagName || '')) { now.onSave(); e.preventDefault(); }
     };

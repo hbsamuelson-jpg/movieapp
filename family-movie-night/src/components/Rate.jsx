@@ -101,8 +101,8 @@ function QuickSwipe({ entries, me, onRate }) {
     if (last.movie.year && last.movie.year !== year && years.includes(last.movie.year)) setYear(last.movie.year);
   };
   // Number keys rate the movie on screen (not while a movie's detail sheet is open on top).
-  useStarKeys({ stars, onStars: setStars, // Enter moves on: 3 stars or more is saved as "would watch again", fewer as plain watched, none skips.
-    onSave: () => { if (!movie) return; if (stars > 0) commit({ status: stars > 2.5 ? 'again' : 'seen', stars }); else advance(false); }, enabled: Boolean(movie) && !document.querySelector('[role="dialog"]') });
+  useStarKeys({ stars, onStars: setStars, onUndo: undo, // Enter moves on: 3 stars or more is saved as "would watch again", fewer as plain watched, none skips.
+    onSave: () => { if (!movie) return; if (stars > 0) commit({ status: stars > 2.5 ? 'again' : 'seen', stars }); else advance(false); }, enabled: !document.querySelector('[role="dialog"]') });
   const toggle = (list, set) => (value) => set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
   const toggleGenre = toggle(genres, setGenres);
   const toggleEra = toggle(eras, setEras);
@@ -178,7 +178,7 @@ function QuickSwipe({ entries, me, onRate }) {
                 <span className="col-span-2 text-center"><KeyHint>{stars > 2.5 ? 'Enter saves it as "watch again" and goes to the next movie.' : 'Enter saves it as watched and goes to the next movie.'}</KeyHint></span>
               </div>
             ) : (
-              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint>Keyboard: 1–5 for stars, the same key again for half a star less, Enter for the next movie.</KeyHint></>
+              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint>Keyboard: 1–5 for stars, the same key again for half a star less, Enter for the next movie, Delete to undo.</KeyHint></>
             )}
           </div>
 

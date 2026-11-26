@@ -1,6 +1,7 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { voteResult, liking, quality, qualityNudge, shownStars, forYou, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { familyStats, unscoredNights } from '../src/lib/stats.js';
+import { voteResult, liking, quality, qualityNudge, shownStars, forYou, activeSnoozes, applyFilters, onOurServices, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -177,5 +178,55 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   assert.equal(picks.find((p) => p.movie.id === 901).because, 'Kid loved it');
   assert.equal(picks.find((p) => p.movie.id === 904).because, 'like Alpha');
   assert.ok(picks.every((p) => p.match >= 0 && p.match <= 100));
+}
+
+// Where to watch: a boost for our services, and a filter that keeps only those.
+{
+  const on = (id, title, names) => ({ ...movie(id, title, ['Comedy']), watch: { at: Date.now(), on: names.map((name) => ({ name })) } });
+  const N = on(801, 'OnNetflix', ['Netflix']), H = on(802, 'OnHulu', ['Hulu']), U = movie(803, 'Unknown', ['Comedy']);
+  const es = { 801: { movie: N, ratings: { a: want } }, 802: { movie: H, ratings: { a: want } }, 803: { movie: U, ratings: { a: want } } };
+  const plain = suggest(es, ['a']);
+  const ours = suggest(es, ['a'], { services: ['Netflix'] });
+  assert.equal(ours[0].movie.id, 801);
+  assert.equal(ours.find((e) => e.movie.id === 801).rank - plain.find((e) => e.movie.id === 801).rank, 6);
+  assert.deepEqual(onOurServices(H, ['Netflix']), []);
+  assert.deepEqual(applyFilters(ours, { certs: [], services: ['Netflix'] }).map((e) => e.movie.id), [801]);
+  // Snoozed movies are left out, but only while the snooze lasts and only for people watching.
+  const people = [{ id: 'a', snoozed: { 801: 2000, 802: 500 } }, { id: 'b', snoozed: { 803: 2000 } }];
+  assert.deepEqual([...activeSnoozes(people, ['a'], 1000)], ['801']);
+  assert.deepEqual(suggest(es, ['a'], { snoozed: activeSnoozes(people, ['a'], 1000) }).map((e) => e.movie.id).sort(), [802, 803]);
+}
+
+// Ranked vote: 3, 2, 1 points; changing a ballot moves only the difference.
+{
+  const { voteDeltas } = await import('../src/lib/votes.js');
+  const ranked = { ranked: true }, single = {};
+  assert.deepEqual(voteDeltas(ranked, [1, 2, 3]), { 1: 3, 2: 2, 3: 1 });
+  assert.deepEqual(voteDeltas(ranked, [2, 1], [1, 2, 3]), { 1: -1, 2: 1, 3: -1 });
+  assert.deepEqual(voteDeltas(single, [5], [4]), { 4: -1, 5: 1 });
+  assert.deepEqual(voteDeltas(single, [5], [5]), {});
+}
+
+// Family stats.
+{
+  const A = movie(701, 'A', ['Comedy']), B = movie(702, 'B', ['Comedy']), C = movie(703, 'C', ['Drama']), D = movie(704, 'D', ['Drama']);
+  const people = [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }, { id: 'z', name: 'Z' }];
+  const es = {
+    701: { movie: A, ratings: { x: seen(5), y: seen(5), z: seen(1) } },
+    702: { movie: B, ratings: { x: seen(4), y: seen(4), z: seen(2) } },
+    703: { movie: C, ratings: { x: seen(3), y: seen(3), z: seen(5) } },
+    704: { movie: D, ratings: { x: seen(4), y: seen(4), z: { status: 'seen', stars: null, via: 'watched' } } },
+  };
+  const hist = [{ id: 'n1', at: 1000, movie: A, via: 'vote', watchers: ['x', 'y', 'z'] }, { id: 'n2', at: 5000, movie: D, via: 'spin', watchers: ['x', 'z'] }];
+  const st = familyStats(es, people, hist);
+  assert.equal(st.pairs[0].agreement, 100);
+  assert.deepEqual([st.pairs[0].a.id, st.pairs[0].b.id], ['x', 'y']);
+  assert.equal(st.pairs.length, 1); // z shares only 3 rated movies with the others
+  assert.equal(st.split.movie.id, 701);
+  assert.equal(st.nights.count, 2);
+  assert.equal(st.nights.how.vote, 1);
+  assert.deepEqual(unscoredNights(hist, es, 'z', 5000 + 3 * 3600e3).map((n) => n.id), ['n2']);
+  assert.deepEqual(unscoredNights(hist, es, 'z', 5000 + 60e3), []);
+  assert.deepEqual(unscoredNights(hist, es, 'x', 1e12), []);
 }
 console.log('\nAll suggestion checks passed.');

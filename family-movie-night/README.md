@@ -163,13 +163,23 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
   - **Wanted:** movies someone watching marked Want to or Watch again. These come first.
   - **New to us:** movies nobody watching has seen that fit the group's interests: similar to their favourites and most-loved movies, or by a director or writer they keep liking. Each says why it's there ("like Knives Out", "directed by Hayao Miyazaki").
 
-  Two ways to steer it:
+  Ways to steer it:
   - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
+  - **Time tonight:** Any length, 90 min, 2 hours or 2½ hours. Longer movies are hidden.
+  - **Where to watch:** tick the streaming services your family has (shared by everyone). Movies on them get a small lift and say "on Netflix"; **Only on our services** hides everything else.
   - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, with everyone's vetoes still applied.
 
-  The list shows the top 20, with **Show more** underneath. Put movies on the shared shortlist with **+**, then choose together, **Spin**, or hold a **Secret vote** (below). Filters (MPAA rating, genre, runtime) are behind the Filters button.
+  The list shows the top 20, with **Show more** underneath. Put movies on the shared shortlist with **+**, then choose together, **Spin**, or hold a **Secret vote** (below). Filters (MPAA rating, genre) are behind the Filters button.
 
   **History** (top right of Tonight) is the log of past movie nights: the movie, the date, how it was chosen (vote, spin or picked), who voted, and who watched. Tap **We're watching this** on a vote result or spin, or **We watched this** on any movie, to log a night. Afterwards each person can give the movie a score from the History page; the entry shows everyone's score and the average.
+  **Ranked vote.** With three or more movies on the shortlist, the secret vote is ranked: each person taps their top 3 in order and casts. A first choice is worth 3 points, a second 2, a third 1, and the most points wins, which favours the movie everyone is fine with. With two movies it stays one vote each. Ties can be spun.
+
+  **Not tonight.** On any movie's page, **Not tonight** hides it from your suggestions for 3 weeks without ruling it out. It applies whenever you're one of the people watching. Hidden movies are listed at the bottom of Tonight with **Bring back**.
+
+  **Stats** (top right of Tonight): how many movie nights and how they were chosen, the best and worst night by score, how closely each pair of people agree (100% = identical stars; each star apart costs 25 points; needs 4 movies both rated), the movie that split you most, family favourites (average 4+), and each person's count, average and top genre. Only star ratings count.
+
+  **Score reminder.** Two hours after a movie night is logged, anyone who watched and hasn't scored it sees "How was …?" at the top of Tonight and a dot on History and the Tonight tab. The ✕ dismisses that reminder on that device.
+
 - **Rate** — two modes, switched at the top:
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
   - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
@@ -196,6 +206,8 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
+**Movie page extras.** **Trailer** opens the official trailer on YouTube (or a YouTube search when TMDB has none). **Where to watch** lists the US streaming services carrying the movie, with yours ticked. That list comes from JustWatch through TMDB, is refreshed every two weeks, and can lag; service names are shown as text. Add-on channels are folded into the service ("AMC+ Amazon Channel" counts as AMC+).
+
 **Title links.** On a movie's detail sheet and on the Quick Swipe card, the title opens Rotten Tomatoes in a new tab. It goes to their search results for that title (the movie is the top result), because nothing the app has access to gives a movie's exact Rotten Tomatoes address.
 
 **Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise its Metacritic score, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
@@ -215,6 +227,8 @@ Each present person then contributes a score out of 100: Want to 92, Watch again
 
 People who aren't watching tonight don't count, including their vetoes.
 
+**Our services.** A movie streaming on a service the family ticked gets +6. Movies whose streaming info hasn't been fetched yet count as not on your services when the filter is on.
+
 **In the mood for.** Each priority genre a movie matches adds to its score: +15 for the first, +5 for each further one, up to +25. It changes the order, never what's shown.
 
 **Movies like….** For each reference movie the app looks for, strongest first: other movies in the same series, TMDB's recommendations, other movies by the same director, well-known movies sharing its themes (keywords), and TMDB's "similar" list. Sharing only a genre and decade never gets a movie in by itself; it can only strengthen one that qualified another way. Each movie gets a similarity from 0 to 1, raised when several signals agree or when it matches several reference movies, and each says why it's there ("same series as…", "from the director of…"). The list then shows only those movies, scored 65% group score and 35% similarity. Rule 2 above is dropped (nobody needs to have asked for them), rule 1 still applies, and a movie everyone present has already watched is left out. The same engine fills the new-to-us list from each person's favourites.
@@ -231,10 +245,12 @@ People who aren't watching tonight don't count, including their vetoes.
 groups/family                         ← the one shared space for this site
   members: {
     "k3x9q2ab": { name: "Couper", joinedAt: timestamp, uid: "<Google uid>",   // uid only if linked
-                  favorites: [ { …movie }, … ] },                              // all-time favourites
+                  favorites: [ { …movie }, … ],                                // all-time favourites
+                  snoozed: { "105": 1797500000000 } },                         // "not tonight": movie id -> hidden until (ms)
     "p7m1zz0c": { name: "Henry",  joinedAt: timestamp }
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
+  services: [ "Netflix", "Disney+" ]      // streaming services the family has
   ai: { day: "2026-11-26", count: 7 }     // assistant questions asked today
   history: [                              // past movie nights, newest first
     { id: "h1a2b3c4", at: 1795700000000,  // when (ms)
@@ -245,10 +261,11 @@ groups/family                         ← the one shared space for this site
   ]                                       // scores live in the movie's ratings, below
   vote: {                               // the current secret vote, if any
     id: "x1y2z3", open: true,
+    ranked: true,                        // 3+ movies: everyone ranks a top 3, worth 3 / 2 / 1 points
     options: [ { id, title, year, poster }, … ],
     voters: [ "k3x9q2ab", "p7m1zz0c" ],  // who gets a ballot
     voted:  [ "k3x9q2ab" ],              // who has cast one (not what they chose)
-    tally:  { "105": 1 }                 // votes per movie id
+    tally:  { "105": 3 }                 // votes (or points, if ranked) per movie id
   }
 
 groups/family/movies/{tmdbId}         ← one document per movie anyone has rated
@@ -266,6 +283,8 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     imdb: "tt0088763",
     rt: null, mc: 88,                 // Rotten Tomatoes and Metacritic scores, 0–100 or null
     scored: 2,                        // critic-score lookup done (version number)
+    watch: { at: 1795700000000, on: [ { name: "Disney+" } ], rent: true },  // US streaming, and when it was checked
+    trailer: "Rvr68u6k5sI",           // YouTube id of the official trailer, or null
     detailed: true                    // runtime + cert have been fetched
   }
   ratings: {
@@ -296,6 +315,8 @@ src/
     store.js                on-device store and shared store, same interface
     tmdb.js                 top-of-year decks, eras, similar movies, varied picks, search, details
     suggest.js              taste profiles and suggestions (pure functions)
+    stats.js                family stats and the "waiting for your score" list (pure functions)
+    votes.js                vote point arithmetic
     discover.js             finds unwatched movies that fit the group (favourites, loved movies, liked crew)
     assistant.js            summarises the group for the AI, resolves and vets its picks
     autoUpdate.js           checks for a newer build and reloads into it
@@ -303,6 +324,8 @@ src/
   components/
     Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
     History.jsx             past movie nights and after-the-movie scores
+    Stats.jsx               family stats
+    Services.jsx            tick the family's streaming services
     ForYou.jsx              "Movies you should like" on the Mine tab
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
     Ask.jsx                 the assistant chat

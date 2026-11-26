@@ -13,6 +13,7 @@ import { hasFirebase, pref } from './lib/config.js';
 import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js';
 import { createLocalStore, createSharedStore, newId8, slim } from './lib/store.js';
 import { enrich, needsDetails } from './lib/tmdb.js';
+import { unscoredNights } from './lib/stats.js';
 
 const TABS = [
   { id: 'tonight', label: 'Tonight', icon: Popcorn },
@@ -92,6 +93,7 @@ export default function App() {
   if (!data) return <Shell><Centered>Loading…</Centered></Shell>;
 
   const { entries, shortlist, vote, history } = data;
+  const services = data.services || [];
   const myself = members.find((m) => m.id === me);
   if (!myself) {
     return (
@@ -138,12 +140,13 @@ export default function App() {
   };
   const voting = {
     start: (movies, voters) => store.startVote(movies, voters),
-    cast: (movieId, previous) => store.castVote(me, movieId, previous),
+    cast: (picks, previous) => store.castVote(me, picks, previous),
     end: () => store.endVote(),
     clear: () => store.clearVote(),
   };
   // A dot on the Tonight tab when there's an open vote you haven't cast yet.
   const voteWaiting = Boolean(vote?.open && vote.voters.includes(me) && !vote.voted.includes(me));
+  const scoreWaiting = unscoredNights(history, entries, me).length > 0;
   const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
   const toggleListed = (movie) => store.setShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
   const go = (id) => { setTab(id); setShowGroup(false); };
@@ -167,7 +170,7 @@ export default function App() {
                 <button key={t.id} type="button" aria-current={on ? 'page' : undefined} onClick={() => go(t.id)} className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-bold transition ${on ? 'text-gold' : 'text-dim hover:text-cream'}`}>
                   <span className="relative">
                     <t.icon size={21} />
-                    {t.id === 'tonight' && voteWaiting && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-velvet ring-2 ring-house" aria-label="A vote is waiting for you" />}
+                    {t.id === 'tonight' && (voteWaiting || scoreWaiting) && <span className="absolute -right-1.5 -top-1 h-2.5 w-2.5 rounded-full bg-velvet ring-2 ring-house" aria-label={voteWaiting ? 'A vote is waiting for you' : 'A movie night is waiting for your score'} />}
                   </span>
                   {t.label}
                 </button>
@@ -192,7 +195,7 @@ export default function App() {
         />
       ) : (
         <>
-          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} services={services} onServices={(list) => store.setServices(list)} onSnooze={(memberId, movie, until) => store.snooze(memberId, String(movie.id), until)} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
@@ -201,7 +204,7 @@ export default function App() {
       )}
 
       {open && (
-        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} onToggleListed={toggleListed} onWatched={(movie) => logWatched(movie, 'pick', present.map((m) => m.id))} onSave={rate} onClose={() => setOpen(null)} />
+        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} services={services} snoozedUntil={(myself.snoozed?.[open.id] || 0) > Date.now() ? myself.snoozed[open.id] : null} onSnooze={(movie, until) => store.snooze(me, String(movie.id), until)} onToggleListed={toggleListed} onWatched={(movie) => logWatched(movie, 'pick', present.map((m) => m.id))} onSave={rate} onClose={() => setOpen(null)} />
       )}
     </Shell>
   );

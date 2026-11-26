@@ -122,6 +122,16 @@ function memberScore(rating, profile, movie) {
   return { kind: 'seen', score: liked * 20 * 0.5 }; // seen it, didn't ask for a rewatch
 }
 
+const SERVICE_BOOST = 6;
+/** Which of the family's services carry this movie: a list of service names (empty if none or unknown). */
+export const onOurServices = (movie, services = []) => (movie.watch?.on || []).map((s) => s.name).filter((name) => services.includes(name));
+/** Movie ids that anyone in `memberIds` has snoozed and whose snooze hasn't run out. */
+export function activeSnoozes(members, memberIds, now = Date.now()) {
+  const ids = new Set();
+  for (const m of members) if (memberIds.includes(m.id)) for (const [movieId, until] of Object.entries(m.snoozed || {})) if (until > now) ids.add(String(movieId));
+  return ids;
+}
+
 /**
  * Rank movies for the people who are here tonight. Two kinds of movie make the list:
  *
@@ -140,10 +150,12 @@ function memberScore(rating, profile, movie) {
  *   already seen   — minus 30 for each person watching who has seen it and didn't mark Watch again
  *   reviews        — a nudge of up to 4 points either way for the critic score
  *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
+ *   services       — +6 when it streams on a service the family has
+ *   snoozed        — movie ids someone watching said "not tonight" to: left out
  *
- * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }] }
+ * options: { priorityGenres: string[], similar: [{ movie, sim }], discoveries: [{ movie, sim, because }], services: string[], snoozed: Set }
  */
-export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [] } = {}) {
+export function suggest(entries, presentIds, { priorityGenres = [], similar = [], discoveries = [], services = [], snoozed = new Set() } = {}) {
   if (!presentIds.length) return [];
   const profiles = Object.fromEntries(presentIds.map((id) => [id, tasteProfile(entries, id)]));
   const seeded = similar.length > 0;
@@ -161,6 +173,7 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
 
   const out = [];
   for (const { entry, sim = simById.get(String(entry.movie.id))?.sim || 0, because, fresh } of candidates) {
+    if (snoozed.has(String(entry.movie.id))) continue;
     const parts = presentIds.map((id) => ({ id, ...memberScore(entry.ratings?.[id], profiles[id], entry.movie) }));
     if (parts.some((p) => p.kind === 'veto')) continue;
     const wanting = parts.filter((p) => p.kind === 'want' || p.kind === 'again');
@@ -179,6 +192,9 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
 
     raw += qualityNudge(entry.movie); // better-reviewed movies edge ahead, only a little
 
+    const ours = onOurServices(entry.movie, services);
+    if (ours.length) raw += SERVICE_BOOST;
+
     const vibes = priorityGenres.filter((g) => (entry.movie.genres || []).includes(g));
     if (vibes.length) raw += Math.min(25, 15 + 5 * (vibes.length - 1));
 
@@ -192,6 +208,7 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
       wanting: wanting.length,
       rewatch: parts.some((p) => p.kind === 'again' || p.kind === 'seen'),
       alreadySeen,
+      ours,
       sim,
       vibes,
     });
@@ -237,6 +254,7 @@ export function rankToLiking(count, flagged = []) {
  * `winners` has more than one movie when there's a tie, and none if nobody voted.
  */
 export function voteResult(vote) {
+  // In a ranked vote "votes" are points: 3 for a first choice, 2 for a second, 1 for a third.
   const rows = vote.options.map((movie) => ({ movie, votes: Math.max(0, vote.tally?.[movie.id] || 0) })).sort((a, b) => b.votes - a.votes);
   const top = rows[0]?.votes || 0;
   const cast = (vote.voted || []).length;
@@ -244,12 +262,13 @@ export function voteResult(vote) {
   return { rows, cast, expected, everyoneIn: expected > 0 && (vote.voters || []).every((id) => (vote.voted || []).includes(id)), winners: top > 0 ? rows.filter((r) => r.votes === top).map((r) => r.movie) : [] };
 }
 
-/** filters: { genre: string | '', certs: string[], maxRuntime: number | 0 } */
+/** filters: { genre: string | '', certs: string[], maxRuntime: number | 0, services: string[] (only movies streaming on one of these) } */
 export function applyFilters(list, filters) {
   return list.filter(({ movie }) => {
     if (filters.genre && !(movie.genres || []).includes(filters.genre)) return false;
     if (filters.certs?.length && !filters.certs.includes(movie.cert)) return false;
     if (filters.maxRuntime && !(movie.runtime && movie.runtime <= filters.maxRuntime)) return false;
+    if (filters.services?.length && !onOurServices(movie, filters.services).length) return false;
     return true;
   });
 }

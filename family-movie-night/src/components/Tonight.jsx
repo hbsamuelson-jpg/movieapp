@@ -1,22 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Dices, History as HistoryIcon, Plus, SlidersHorizontal, Vote as VoteIcon, X } from 'lucide-react';
-import { CERTS } from '../lib/config.js';
-import { applyFilters, mergeSimilar, suggest } from '../lib/suggest.js';
+import { BarChart3, Check, ChevronDown, Dices, History as HistoryIcon, Plus, SlidersHorizontal, Star, Vote as VoteIcon, X } from 'lucide-react';
+import { CERTS, hasTmdb, pref } from '../lib/config.js';
+import { unscoredNights } from '../lib/stats.js';
+import { activeSnoozes, applyFilters, mergeSimilar, suggest } from '../lib/suggest.js';
 import { discover, interestSeeds } from '../lib/discover.js';
 import { enrich, GENRE_CHOICES, similarTo } from '../lib/tmdb.js';
 import History from './History.jsx';
+import Services from './Services.jsx';
+import Stats from './Stats.jsx';
 import MoviePicker from './MoviePicker.jsx';
 import Vote from './Vote.jsx';
 import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, Poster } from './ui.jsx';
 
-const RUNTIMES = [[0, 'Any length'], [90, '90 min or less'], [105, '1h 45m or less'], [120, '2 hours or less']];
+const RUNTIMES = [[0, 'Any length'], [90, '90 min'], [120, '2 hours'], [150, '2½ hours']];
 
 /** Who's here, what the app suggests for them, and the shortlist you put up for a choice or a spin. */
-export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, history, onWatch, onRemoveHistory, onOpen, onRate }) {
+export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, history, services, onServices, onSnooze, onWatch, onRemoveHistory, onOpen, onRate }) {
   const [filters, setFilters] = useState({ genre: '', certs: [], maxRuntime: 0 });
   const [showFilters, setShowFilters] = useState(false);
   const [spinning, setSpinning] = useState(null); // { pool, via } being spun, or null
   const [showHistory, setShowHistory] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [onlyOurs, setOnlyOurs] = useState(false); // limit the list to movies on the family's services
+  const [editServices, setEditServices] = useState(false);
+  const [showSnoozed, setShowSnoozed] = useState(false);
+  const [skipped, setSkipped] = useState(() => pref.get('score-skipped', [])); // score prompts dismissed on this device
   const [limit, setLimit] = useState(20); // how many suggestions to show
   const [vibes, setVibes] = useState([]); // tonight's priority genres: boosted, never a hard filter
   const [seeds, setSeeds] = useState([]); // "movies like…" reference movies
@@ -60,15 +68,21 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
     return () => { live = false; };
   }, [interestKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list })), [entries, presentIds.join(), vibes, similar, seeking, found]); // eslint-disable-line react-hooks/exhaustive-deps
+  const snoozedIds = useMemo(() => activeSnoozes(members, presentIds), [members, presentIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list, services, snoozed: snoozedIds })), [entries, presentIds.join(), vibes, similar, seeking, found, services, snoozedIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const genres = useMemo(() => [...new Set(ranked.flatMap((e) => e.movie.genres || []))].sort(), [ranked]);
-  const filtered = applyFilters(ranked, filters);
+  const filtered = applyFilters(ranked, { ...filters, services: onlyOurs ? services : [] });
+  // Everyone's active snoozes among the people watching, for the "bring back" list.
+  const snoozes = present.flatMap((m) => Object.entries(m.snoozed || {}).filter(([, until]) => until > Date.now()).map(([id, until]) => ({ member: m, id, until, movie: entries[id]?.movie || found.list.find((d) => String(d.movie.id) === id)?.movie || null }))).filter((x) => x.movie);
+  const toScore = unscoredNights(history, entries, me);
+  const prompt = toScore.find((n) => !skipped.includes(n.id));
+  const skip = (id) => { const next = [...skipped, id].slice(-50); setSkipped(next); pref.set('score-skipped', next); };
   // Wanted movies always come first; new discoveries fill in underneath.
   const shown = seeds.length ? filtered
     : lane === 'all' ? [...filtered.filter((e) => e.lane === 'wanted'), ...filtered.filter((e) => e.lane === 'new')]
       : filtered.filter((e) => e.lane === lane);
   const laneCount = (key) => filtered.filter((e) => e.lane === key).length;
-  const activeFilters = (filters.genre ? 1 : 0) + filters.certs.length + (filters.maxRuntime ? 1 : 0);
+  const activeFilters = (filters.genre ? 1 : 0) + filters.certs.length;
   const toggleCert = (c) => setFilters((f) => ({ ...f, certs: f.certs.includes(c) ? f.certs.filter((x) => x !== c) : [...f.certs, c] }));
 
   const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
@@ -83,7 +97,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
   const note = (e) => (
     <>
       <span className="font-bold text-gold">{e.score}% match</span>
-      <span className="text-dim"> · {e.lane === 'new' && !seeded ? `new to ${present.length > 1 ? 'everyone' : 'you'}${e.because ? ` · ${e.because}` : ''}` : `${wantText(e)}${e.alreadySeen ? ` · ${e.alreadySeen} already seen it` : e.rewatch ? ' · rewatch for some' : ''}`}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
+      <span className="text-dim"> · {e.lane === 'new' && !seeded ? `new to ${present.length > 1 ? 'everyone' : 'you'}${e.because ? ` · ${e.because}` : ''}` : `${wantText(e)}${e.alreadySeen ? ` · ${e.alreadySeen} already seen it` : e.rewatch ? ' · rewatch for some' : ''}`}{e.ours.length ? ` · on ${e.ours[0]}` : ''}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
     </>
   );
   const AddButton = ({ movie }) => {
@@ -95,6 +109,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
     );
   };
 
+  if (showStats) return <Stats entries={entries} members={members} history={history} me={me} onBack={() => setShowStats(false)} onOpen={onOpen} />;
   if (showHistory) return <History history={history} entries={entries} members={members} me={me} onBack={() => setShowHistory(false)} onOpen={onOpen} onRemove={onRemoveHistory} />;
 
   const spinPool = shortlist.length >= 2 ? shortlist : shown.slice(0, 8).map((e) => e.movie);
@@ -103,16 +118,31 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
     <div className="flex flex-col gap-6">
       <div className="-mb-2 flex items-center justify-between gap-3">
         <h2 className="text-2xl font-bold text-cream">Tonight</h2>
-        <button type="button" onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream hover:border-dim">
-          <HistoryIcon size={15} /> History{history.length ? ` ${history.length}` : ''}
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setShowStats(true)} className="inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream hover:border-dim">
+            <BarChart3 size={15} /> Stats
+          </button>
+          <button type="button" onClick={() => setShowHistory(true)} className="relative inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream hover:border-dim">
+            <HistoryIcon size={15} /> History{history.length ? ` ${history.length}` : ''}
+            {toScore.length > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-velvet ring-2 ring-house" aria-label={`${toScore.length} movie night${toScore.length === 1 ? '' : 's'} waiting for your score`} />}
+          </button>
+        </div>
       </div>
+
+      {prompt && (
+        <div className="flex items-center gap-3 rounded-xl border border-gold/60 bg-seat p-3">
+          <Star size={18} className="shrink-0 text-gold" fill="currentColor" />
+          <p className="min-w-0 flex-1 text-sm text-cream">How was <span className="font-bold">{prompt.movie.title}</span>?</p>
+          <button type="button" onClick={() => onOpen(entries[prompt.movie.id]?.movie || prompt.movie)} className="shrink-0 rounded-lg bg-velvet px-3 py-2 text-sm font-bold text-cream">Give it a score</button>
+          <button type="button" onClick={() => skip(prompt.id)} aria-label="Not now" className="shrink-0 rounded-full p-1.5 text-dim hover:text-cream"><X size={16} /></button>
+        </div>
+      )}
 
       {vote && (
         <Vote
           key={`${vote.id}:${me}`} vote={vote} members={members} me={me}
-          onCast={(movieId, previous) => voting.cast(movieId, previous)} onEnd={voting.end} onClear={voting.clear}
-          onRevote={() => voting.start(vote.options, vote.voters)} onSpin={(pool) => setSpinning({ pool, via: 'vote', voters: vote.voted, votes: Math.max(...Object.values(vote.tally || { x: 0 })) })} onWatch={(movie, extra) => onWatch(movie, 'vote', presentIds, extra)}
+          onCast={(picks, previous) => voting.cast(picks, previous)} onEnd={voting.end} onClear={voting.clear}
+          onRevote={() => voting.start(vote.options, vote.voters)} onSpin={(pool) => setSpinning({ pool, via: 'vote', voters: vote.voted, votes: Math.max(...Object.values(vote.tally || { x: 0 })), ranked: Boolean(vote.ranked) })} onWatch={(movie, extra) => onWatch(movie, 'vote', presentIds, extra)}
           onOpen={(m) => onOpen(entries[m.id]?.movie || m)}
         />
       )}
@@ -142,6 +172,20 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
           </div>
           {vibes.length > 0 && <p className="text-xs text-dim">{vibes.join(', ')} movies get a big boost. Great picks from other genres still show.</p>}
         </div>
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Time tonight</h2>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Longest movie tonight">
+            {RUNTIMES.map(([minutes, label]) => <Chip key={minutes} on={filters.maxRuntime === minutes} onClick={() => setFilters((f) => ({ ...f, maxRuntime: minutes }))}>{label}</Chip>)}
+          </div>
+        </div>
+        {hasTmdb && <div className="flex flex-col gap-1.5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Where to watch</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {services.length > 0 && <Chip on={onlyOurs} onClick={() => setOnlyOurs((v) => !v)}>Only on our services</Chip>}
+            <button type="button" onClick={() => setEditServices((v) => !v)} aria-expanded={editServices} className="text-sm font-bold text-gold">{editServices ? 'Done' : services.length ? `Our services (${services.length})` : 'Pick your streaming services'}</button>
+          </div>
+          {editServices && <Services services={services} onChange={(next) => { onServices(next); if (!next.length) setOnlyOurs(false); }} />}
+        </div>}
         <div className="flex flex-col gap-1.5">
           <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Movies like…</h2>
           <MoviePicker id="seed-search" chosen={seeds} placeholder={seeds.length ? 'Add another movie' : 'Type a movie, e.g. Knives Out'} label="Find movies similar to" onAdd={(m) => setSeeds((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))} onRemove={(id) => setSeeds((list) => list.filter((x) => x.id !== id))} />
@@ -192,8 +236,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
               {CERTS.map((c) => <Chip key={c} on={filters.certs.includes(c)} onClick={() => toggleCert(c)}>{c}</Chip>)}
             </div>
             <Select id="filter-genre" label="Genre" value={filters.genre} onChange={(v) => setFilters((f) => ({ ...f, genre: v }))} options={[['', 'Any genre'], ...genres.map((g) => [g, g])]} />
-            <Select id="filter-runtime" label="Runtime" value={filters.maxRuntime} onChange={(v) => setFilters((f) => ({ ...f, maxRuntime: Number(v) }))} options={RUNTIMES} />
-            {activeFilters > 0 && <button type="button" onClick={() => setFilters({ genre: '', certs: [], maxRuntime: 0 })} className="text-sm text-dim underline">Clear</button>}
+            {activeFilters > 0 && <button type="button" onClick={() => setFilters((f) => ({ ...f, genre: '', certs: [] }))} className="text-sm text-dim underline">Clear</button>}
           </div>
         )}
 
@@ -222,10 +265,25 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         )}
       </section>
 
+      {snoozes.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <button type="button" onClick={() => setShowSnoozed((v) => !v)} aria-expanded={showSnoozed} className="self-start text-sm font-bold text-dim underline">{snoozes.length} hidden for now ("not tonight")</button>
+          {showSnoozed && (
+            <ul className="-mx-2 flex flex-col divide-y divide-aisle/60">
+              {snoozes.map((x) => (
+                <MovieRow key={x.member.id + x.id} movie={x.movie} onOpen={onOpen}
+                  note={<span className="text-dim">{x.member.id === me ? 'You' : x.member.name} · back {new Date(x.until).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
+                  action={<button type="button" onClick={() => onSnooze(x.member.id, x.movie, null)} className="mr-1 shrink-0 rounded-full border border-aisle px-3 py-1.5 text-xs font-bold text-cream">Bring back</button>} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {spinning && (
         <SpinReel
           pool={spinning.pool} onClose={() => setSpinning(null)} onOpen={(m) => { setSpinning(null); onOpen(m); }}
-          onWatch={(m) => { onWatch(m, spinning.via, presentIds, spinning.voters ? { voters: spinning.voters, votes: spinning.votes } : {}); setSpinning(null); }}
+          onWatch={(m) => { onWatch(m, spinning.via, presentIds, spinning.voters ? { voters: spinning.voters, votes: spinning.votes, ranked: spinning.ranked } : {}); setSpinning(null); }}
         />
       )}
     </div>

@@ -47,7 +47,7 @@ export default function History({ history, entries, members, me, onBack, onOpen,
                   <div className="text-sm text-cream">{when(night.at)}</div>
                   <div className="text-xs text-dim">
                     {HOW[night.via] || HOW.pick}
-                    {night.via === 'vote' && night.voters?.length ? ` · ${night.votes} of ${night.voters.length} votes · voted: ${names(night.voters, members, me)}` : ''}
+                    {night.via === 'vote' && night.voters?.length ? ` · ${night.ranked ? `${night.votes} points` : `${night.votes} of ${night.voters.length} votes`} · voted: ${names(night.voters, members, me)}` : ''}
                   </div>
                   <div className="text-xs text-dim">Watched by {names(night.watchers, members, me) || 'nobody recorded'}</div>
                 </div>

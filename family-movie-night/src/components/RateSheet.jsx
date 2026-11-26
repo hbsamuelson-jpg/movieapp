@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, Clock, Play, Plus, X } from 'lucide-react';
 import { shownStars } from '../lib/suggest.js';
-import { enrich } from '../lib/tmdb.js';
+import { enrich, trailerUrl } from '../lib/tmdb.js';
+
+const SNOOZE = 21 * 24 * 60 * 60 * 1000; // "not tonight" hides a movie for three weeks
+const day = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub, TitleLink } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
-export default function RateSheet({ movie: initial, entry, members, me, listed, onToggleListed, onWatched, onSave, onClose }) {
+export default function RateSheet({ movie: initial, entry, members, me, listed, services = [], snoozedUntil, onSnooze, onToggleListed, onWatched, onSave, onClose }) {
   const [movie, setMovie] = useState(entry?.movie?.detailed ? entry.movie : initial);
   const mine = entry?.ratings?.[me];
   const [status, setStatus] = useState(mine?.status || null);
@@ -42,7 +45,10 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
               <h2 className="text-xl font-bold leading-tight text-cream"><TitleLink movie={movie} /></h2>
               <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-full p-2 text-dim hover:bg-aisle hover:text-cream"><X size={20} /></button>
             </div>
-            <ScoreBadge movie={movie} size="lg" className="self-start" />
+            <div className="flex flex-wrap items-center gap-2">
+              <ScoreBadge movie={movie} size="lg" />
+              <a href={trailerUrl(movie)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Play size={12} fill="currentColor" /> Trailer</a>
+            </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-dim">
               {movie.year && <span className="tabular-nums">{movie.year}</span>}
               <CertBadge cert={movie.cert} />
@@ -54,11 +60,26 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
           </div>
         </div>
 
-<div className="grid grid-cols-2 gap-2">
+        {movie.watch && (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-xs font-bold uppercase tracking-widest text-dim">Where to watch</div>
+            {movie.watch.on.length ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {movie.watch.on.map((s) => <li key={s.name} className={`rounded-full border px-2.5 py-1 text-xs font-bold ${services.includes(s.name) ? 'border-gold bg-gold/15 text-gold' : 'border-aisle text-cream'}`}>{s.name}{services.includes(s.name) ? ' ✓' : ''}</li>)}
+              </ul>
+            ) : <p className="text-sm text-dim">{movie.watch.rent ? 'Not on a streaming service right now. You can rent or buy it.' : "Not streaming in the US right now."}</p>}
+            <p className="text-[11px] text-dim">Streaming info from JustWatch, US. It can lag by a few days.</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => onToggleListed(movie)} aria-pressed={listed} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-2 py-2.5 text-sm font-bold ${listed ? 'border-gold bg-gold text-house' : 'border-aisle text-cream'}`}>
           {listed ? <><Check size={16} /> On the shortlist</> : <><Plus size={16} /> Up for tonight</>}
         </button>
           <button type="button" onClick={() => { onWatched(movie); onClose(); }} className="inline-flex items-center justify-center gap-2 rounded-lg border border-aisle px-2 py-2.5 text-sm font-bold text-cream">We watched this</button>
+          {snoozedUntil
+            ? <p className="col-span-2 text-sm text-dim">Hidden from your suggestions until {day(snoozedUntil)}. <button type="button" onClick={() => onSnooze(movie, null)} className="font-bold text-cream underline">Bring it back</button></p>
+            : <button type="button" onClick={() => { onSnooze(movie, Date.now() + SNOOZE); onClose(); }} className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-sm font-bold text-dim hover:text-cream"><Clock size={15} /> Not tonight (hide for 3 weeks)</button>}
         </div>
 
         <div className="flex flex-col gap-2">

@@ -220,18 +220,60 @@ export async function searchMovies(query) {
 
 /** Fill in runtime, MPAA rating and full genres. Returns the movie unchanged in demo mode or on failure. */
 /** True when a movie is missing details the app can still fetch (rating, runtime, crew, critic score). */
-export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!hasOmdb || movie.scored === SCORE_VERSION));
+export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!hasOmdb || movie.scored === SCORE_VERSION) && watchFresh(movie));
+
+/* ---------- Where to watch ---------- */
+// TMDB relays JustWatch's list of which US services carry each movie. The same service shows up
+// under several names ("Paramount Plus Premium", "Paramount+ Amazon Channel"), so each is folded
+// into one plain name. That name is also what a family ticks under "our services".
+const WATCH_TTL = 14 * 24 * 60 * 60 * 1000; // catalogues change; look again after two weeks
+const watchFresh = (movie) => Boolean(movie.watch && Date.now() - movie.watch.at < WATCH_TTL);
+const SERVICE_NAMES = [
+  [/^netflix/i, 'Netflix'], [/prime video/i, 'Prime Video'], [/^disney/i, 'Disney+'], [/^(hbo )?max\b/i, 'HBO Max'],
+  [/^hulu/i, 'Hulu'], [/^apple tv/i, 'Apple TV+'], [/^paramount/i, 'Paramount+'], [/^peacock/i, 'Peacock'],
+  [/^amc ?(\+|plus)/i, 'AMC+'], [/^mgm ?(\+|plus)/i, 'MGM+'], [/^starz/i, 'Starz'], [/^crunchyroll/i, 'Crunchyroll'],
+  [/^criterion/i, 'Criterion Channel'], [/^tubi/i, 'Tubi'], [/^pluto/i, 'Pluto TV'], [/roku channel/i, 'The Roku Channel'],
+  [/^kanopy/i, 'Kanopy'], [/^hoopla/i, 'Hoopla'], [/^youtube premium/i, 'YouTube Premium'], [/^fubo/i, 'fuboTV'],
+];
+/** The services a family can tick, most common first. */
+export const SERVICES = SERVICE_NAMES.map(([, name]) => name);
+export function serviceName(raw) {
+  if (/justwatch/i.test(raw)) return null;
+  const known = SERVICE_NAMES.find(([pattern]) => pattern.test(raw));
+  if (known) return known[1];
+  return raw.replace(/ (amazon|apple tv|roku premium) channel$/i, '').replace(/ (standard )?with ads$/i, '').trim();
+}
+function whereToWatch(results) {
+  const us = results?.US || {};
+  const on = [];
+  for (const p of [...(us.flatrate || []), ...(us.free || []), ...(us.ads || [])]) {
+    const name = serviceName(p.provider_name);
+    if (name && !on.some((x) => x.name === name)) on.push({ name });
+  }
+  return { at: Date.now(), on: on.slice(0, 8), rent: Boolean(us.rent?.length || us.buy?.length) };
+}
+/** The official YouTube trailer's id, or null. */
+function trailerKey(videos) {
+  const list = (videos || []).filter((v) => v.site === 'YouTube' && v.type === 'Trailer');
+  return (list.find((v) => v.official && /official trailer/i.test(v.name)) || list.find((v) => v.official) || list[0])?.key || null;
+}
+/** A link to the trailer: the exact video when known, otherwise a YouTube search for it. */
+export const trailerUrl = (movie) => (movie.trailer
+  ? `https://www.youtube.com/watch?v=${movie.trailer}`
+  : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${movie.title} ${movie.year || ''} official trailer`)}`);
 
 export async function enrich(movie) {
   if (!needsDetails(movie)) return movie;
   try {
-    const raw = await get(`/movie/${movie.id}`, { append_to_response: 'release_dates,credits', language: 'en-US' });
+    const raw = await get(`/movie/${movie.id}`, { append_to_response: 'release_dates,credits,watch/providers,videos', language: 'en-US' });
     const us = raw.release_dates?.results?.find((r) => r.iso_3166_1 === 'US');
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
-    const critics = await criticScores(raw.imdb_id);
+    // A score already saved with the movie is kept, so refreshing where-to-watch costs no lookups.
+    const critics = movie.scored === SCORE_VERSION ? { rt: movie.rt ?? null, mc: movie.mc ?? null, checked: true } : await criticScores(raw.imdb_id);
     return {
       ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []),
       imdb: raw.imdb_id || null, rt: critics.rt, mc: critics.mc, scored: critics.checked ? SCORE_VERSION : false, detailed: true,
+      watch: whereToWatch(raw['watch/providers']?.results), trailer: trailerKey(raw.videos?.results),
     };
   } catch {
     return movie;

@@ -105,7 +105,7 @@ export function StatusStub({ rating }) {
           {starText(rating.stars)}
         </span>
       ) : rating.via ? (
-        <span className="perf py-1 pl-2 pr-3 normal-case tracking-normal">{rating.via === 'favorite' ? 'favourite' : 'ranked'}</span>
+        <span className="perf py-1 pl-2 pr-3 normal-case tracking-normal">{{ favorite: 'favourite', rank: 'ranked', watched: 'not rated yet' }[rating.via] || ''}</span>
       ) : (
         <span className="pr-1" />
       )}

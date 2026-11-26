@@ -5,7 +5,7 @@ import { enrich } from '../lib/tmdb.js';
 import { Avatar, CertBadge, directedBy, formatRuntime, ScoreBadge, NOT_WATCHED, Poster, StarRating, STATUS, StatusStub } from './ui.jsx';
 
 /** Bottom sheet: movie details, your rating, the shortlist toggle, and what everyone else said. */
-export default function RateSheet({ movie: initial, entry, members, me, listed, onToggleListed, onSave, onClose }) {
+export default function RateSheet({ movie: initial, entry, members, me, listed, onToggleListed, onWatched, onSave, onClose }) {
   const [movie, setMovie] = useState(entry?.movie?.detailed ? entry.movie : initial);
   const mine = entry?.ratings?.[me];
   const [status, setStatus] = useState(mine?.status || null);
@@ -54,9 +54,12 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
           </div>
         </div>
 
-        <button type="button" onClick={() => onToggleListed(movie)} aria-pressed={listed} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-bold ${listed ? 'border-gold bg-gold text-house' : 'border-aisle text-cream'}`}>
-          {listed ? <><Check size={16} /> On tonight's shortlist</> : <><Plus size={16} /> Put it up for tonight</>}
+<div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => onToggleListed(movie)} aria-pressed={listed} className={`inline-flex items-center justify-center gap-2 rounded-lg border px-2 py-2.5 text-sm font-bold ${listed ? 'border-gold bg-gold text-house' : 'border-aisle text-cream'}`}>
+          {listed ? <><Check size={16} /> On the shortlist</> : <><Plus size={16} /> Up for tonight</>}
         </button>
+          <button type="button" onClick={() => { onWatched(movie); onClose(); }} className="inline-flex items-center justify-center gap-2 rounded-lg border border-aisle px-2 py-2.5 text-sm font-bold text-cream">We watched this</button>
+        </div>
 
         <div className="flex flex-col gap-2">
           <div className="text-xs font-bold uppercase tracking-widest text-dim">Watched it</div>

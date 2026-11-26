@@ -1,5 +1,5 @@
 // Two interchangeable stores with the same interface:
-//   subscribe(cb, onError)   -> unsubscribe;  cb({ members, entries, shortlist, vote })
+//   subscribe(cb, onError)   -> unsubscribe;  cb({ members, entries, shortlist, vote, history })
 //   addMember(name)          -> the new (or existing, if the name is taken) member id
 //   removeMember(id)
 //   linkMember(id, uid | null)   tie a name to a Google account, or untie it
@@ -11,6 +11,7 @@
 //   castVote(memberId, movieId, previous)  vote, or change a vote (previous = the movie id voted before)
 //   endVote()                              close it and show the result
 //   clearVote()                            remove it
+//   addHistory(entry) / removeHistory(id)  the log of movies watched together
 //
 // A vote is stored as { id, open, options: [movie], voters: [id], voted: [id], tally: { movieId: n } }.
 // Who has voted and how many votes each movie has are kept separately, so nothing stored says
@@ -18,7 +19,7 @@
 // The local store keeps everything in one browser. The shared store keeps it in Firestore,
 // so every device that opens the site sees the same names, ratings and shortlist.
 
-import { arrayUnion, collection, deleteField, doc, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteField, doc, FieldPath, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { spaceId as defaultSpace } from './config.js';
 import { db } from './firebase.js';
 
@@ -26,14 +27,15 @@ const LOCAL_KEY = 'fmn-local-v4';
 const newId = () => Math.random().toString(36).slice(2, 10);
 const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const byName = (a, b) => a.name.localeCompare(b.name);
-const slim = (m) => ({ id: m.id, title: m.title, year: m.year || null, poster: m.poster || null });
+export const newId8 = () => newId();
+export const slim = (m) => ({ id: m.id, title: m.title, year: m.year || null, poster: m.poster || null });
 const newVote = (movies, voters) => ({ id: newId(), open: true, options: movies.map(slim), voters, voted: [], tally: {} });
 
 export function createLocalStore() {
-  let state = { members: [], entries: {}, shortlist: [], vote: null };
+  let state = { members: [], entries: {}, shortlist: [], vote: null, history: [] };
   try {
     const saved = JSON.parse(localStorage.getItem(LOCAL_KEY));
-    if (saved?.members) state = { members: saved.members, entries: saved.entries || {}, shortlist: saved.shortlist || [], vote: saved.vote || null };
+    if (saved?.members) state = { members: saved.members, entries: saved.entries || {}, shortlist: saved.shortlist || [], vote: saved.vote || null, history: saved.history || [] };
   } catch { /* start empty */ }
   const listeners = new Set();
   const commit = (next) => {
@@ -98,6 +100,12 @@ export function createLocalStore() {
     clearVote() {
       commit({ ...state, vote: null });
     },
+    addHistory(entry) {
+      commit({ ...state, history: [...state.history, entry] });
+    },
+    removeHistory(id) {
+      commit({ ...state, history: state.history.filter((h) => h.id !== id) });
+    },
   };
 }
 
@@ -106,6 +114,7 @@ export function createSharedStore(spaceId = defaultSpace) {
   const space = doc(db, 'groups', spaceId);
   const movies = collection(space, 'movies');
   let members = [];
+  let history = [];
 
   return {
     kind: 'shared',
@@ -116,7 +125,8 @@ export function createSharedStore(spaceId = defaultSpace) {
       const stopSpace = onSnapshot(space, (snap) => {
         const data = snap.data() || {}; // no document yet: nobody has added a name
         members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null, favorites: m.favorites || [] })).sort(byName);
-        head = { members, shortlist: data.shortlist || [], vote: data.vote || null };
+        history = data.history || [];
+        head = { members, shortlist: data.shortlist || [], vote: data.vote || null, history };
         emit();
       }, onError);
       const stopMovies = onSnapshot(movies, (snap) => {
@@ -152,10 +162,12 @@ export function createSharedStore(spaceId = defaultSpace) {
       return updateDoc(space, { [`members.${id}.favorites`]: favorites });
     },
     setRating(movie, memberId, rating) {
+      // mergeFields replaces this person's rating outright. A plain merge would blend the new
+      // rating into the old one and leave stale fields behind (e.g. the mark left by a ranking).
       return setDoc(
         doc(movies, String(movie.id)),
         { movie, ratings: { [memberId]: rating || deleteField() }, updatedAt: serverTimestamp() },
-        { merge: true },
+        { mergeFields: ['movie', new FieldPath('ratings', memberId), 'updatedAt'] },
       );
     },
     updateMovie(movie) {
@@ -179,6 +191,12 @@ export function createSharedStore(spaceId = defaultSpace) {
     },
     clearVote() {
       return updateDoc(space, { vote: deleteField() });
+    },
+    addHistory(entry) {
+      return setDoc(space, { history: arrayUnion(entry) }, { merge: true });
+    },
+    removeHistory(id) {
+      return updateDoc(space, { history: history.filter((h) => h.id !== id) });
     },
   };
 }

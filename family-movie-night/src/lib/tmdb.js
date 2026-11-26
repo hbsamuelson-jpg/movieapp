@@ -136,52 +136,76 @@ const overlap = (a, b) => {
 };
 
 /**
- * Movies similar to a seed movie, each with a similarity from 0 to 1.
- * Blends four TMDB signals, favouring titles people have actually heard of:
- *   - its recommendations (strongest, but discounted when hardly anyone has rated the movie)
- *   - well-known movies sharing ALL of its genres
- *   - well-known movies sharing its lead genre and any of its keywords
- *   - its "similar" list (weakest, same discount)
- * A movie that shows up in more than one list scores higher.
+ * Movies similar to a seed movie: [{ movie, sim, why }], best first. `sim` is 0–1 and `why` is
+ * the strongest reason: 'series' (same franchise), 'director' (same director) or 'like'.
+ *
+ * Signals, strongest first:
+ *   series      other films in the same collection
+ *   recommended TMDB's "people who liked this also liked" (discounted for obscure titles)
+ *   director    the seed director's other well-known films
+ *   themes      well-known films sharing its lead genre AND at least one of its keywords
+ *   similar     TMDB's "similar" list (weak, same discount)
+ *   genre + era films sharing ALL its genres from the same era. On its own this is just
+ *               "another big action movie", so it only supports the other signals: a film
+ *               found this way and no other is dropped.
+ * A film that shows up under several signals scores higher.
  */
 export async function similarTo(seed) {
   if (!hasTmdb) {
     return DEMO_CATALOG.filter((m) => m.id !== seed.id)
-      .map((m) => ({ movie: m, sim: overlap(m.genres, seed.genres || []) }))
+      .map((m) => ({ movie: m, sim: overlap(m.genres, seed.genres || []), why: 'like' }))
       .filter((x) => x.sim >= 0.4)
       .sort((a, b) => b.sim - a.sim)
       .slice(0, 30);
   }
-  const quiet = (promise) => promise.catch(() => ({ results: [], keywords: [] }));
-  const ids = Object.entries(GENRES).filter(([, name]) => (seed.genres || []).includes(name)).map(([id]) => id);
-  const discover = (extra) => quiet(get('/discover/movie', { include_adult: 'false', language: 'en-US', sort_by: 'vote_count.desc', ...extra }));
+  const quiet = (promise, empty = {}) => promise.catch(() => empty);
+  const discover = (extra) => quiet(get('/discover/movie', { include_adult: 'false', language: 'en-US', sort_by: 'vote_count.desc', ...extra }), { results: [] });
 
-  const [recs, sims, words, sameGenres] = await Promise.all([
-    quiet(get(`/movie/${seed.id}/recommendations`, { language: 'en-US' })),
-    quiet(get(`/movie/${seed.id}/similar`, { language: 'en-US' })),
-    quiet(get(`/movie/${seed.id}/keywords`)),
-    ids.length ? discover({ with_genres: ids.slice(0, 3).join(',') }) : { results: [] },
+  // One request brings the seed's details, crew, keywords, recommendations and similar list.
+  const raw = await get(`/movie/${seed.id}`, { append_to_response: 'credits,keywords,recommendations,similar', language: 'en-US' });
+  const genreIdList = (raw.genres || []).map((g) => g.id);
+  const seedGenres = (raw.genres || []).map((g) => shortGenre(g.name));
+  const year = raw.release_date ? Number(raw.release_date.slice(0, 4)) : null;
+  const director = keyCrew(raw.credits?.crew || []).find((c) => c.role === 'director');
+  const keywordIds = (raw.keywords?.keywords || []).slice(0, 12).map((k) => k.id);
+
+  const [series, byDirector, themes, sameGenres] = await Promise.all([
+    raw.belongs_to_collection ? quiet(get(`/collection/${raw.belongs_to_collection.id}`, { language: 'en-US' }), { parts: [] }) : { parts: [] },
+    director ? quiet(byPerson(director), []) : [],
+    // Well-regarded (not just biggest) films sharing a theme, from roughly the same era.
+    keywordIds.length && genreIdList.length
+      ? discover({ with_keywords: keywordIds.slice(0, 8).join('|'), with_genres: genreIdList.slice(0, 2).join(','), sort_by: 'vote_average.desc', 'vote_count.gte': '800', ...(year ? { 'primary_release_date.gte': `${year - 20}-01-01` } : {}) })
+      : { results: [] },
+    genreIdList.length >= 2 && year
+      ? discover({ with_genres: genreIdList.slice(0, 3).join(','), 'primary_release_date.gte': `${year - 12}-01-01`, 'primary_release_date.lte': `${year + 12}-12-31` })
+      : { results: [] },
   ]);
-  const keywordIds = (words.keywords || []).slice(0, 10).map((k) => k.id);
-  const sameKeywords = keywordIds.length
-    ? await discover({ with_keywords: keywordIds.join('|'), ...(ids.length ? { with_genres: ids[0] } : {}) })
-    : { results: [] };
 
   // Obscure titles are poor movie-night suggestions, however similar TMDB thinks they are.
-  const known = (raw) => (raw.vote_count >= 1000 ? 1 : raw.vote_count >= 300 ? 0.8 : 0.5);
+  const known = (m) => (m.vote_count >= 1000 ? 1 : m.vote_count >= 300 ? 0.8 : 0.5);
+  const today = new Date().toISOString().slice(0, 10);
   const found = new Map();
-  const add = (results, top, bottom, discount = false) => results.forEach((raw, n) => {
-    if (raw.id === seed.id) return;
-    const strength = (top - ((top - bottom) * n) / Math.max(1, results.length - 1)) * (discount ? known(raw) : 1);
-    const prev = found.get(raw.id);
-    found.set(raw.id, { movie: prev?.movie || normalize(raw), sim: prev ? Math.min(1, Math.max(prev.sim, strength) + 0.15) : strength });
+  const add = (list, top, bottom, { why = 'like', discount = false, support = false } = {}) => list.forEach((item, n) => {
+    if (item.id === seed.id || (!item.release_date && !item.year) || (item.release_date && item.release_date > today)) return; // skip the seed and unreleased films
+    const strength = (top - ((top - bottom) * n) / Math.max(1, list.length - 1)) * (discount ? known(item) : 1);
+    const prev = found.get(item.id);
+    if (!prev) {
+      found.set(item.id, { movie: item.detailed !== undefined ? item : normalize(item), sim: strength, why, solid: !support });
+    } else {
+      // More than one signal agreeing is stronger than any single one (the generic genre list adds little).
+      found.set(item.id, { ...prev, sim: Math.min(1, Math.max(prev.sim, strength) + (support ? 0.04 : 0.12)), why: strength > prev.sim && !support ? why : prev.why, solid: prev.solid || !support });
+    }
   });
-  add(recs.results || [], 0.9, 0.55, true);
-  add(sameGenres.results || [], 0.75, 0.5);
-  add(sameKeywords.results || [], 0.7, 0.45);
-  add(sims.results || [], 0.5, 0.3, true);
+  add((series.parts || []).filter((m) => m.vote_count >= 50), 0.95, 0.88, { why: 'series' });
+  add(raw.recommendations?.results || [], 0.85, 0.5, { discount: true });
+  add(byDirector, 0.75, 0.55, { why: 'director' });
+  add(themes.results || [], 0.6, 0.4);
+  add(raw.similar?.results || [], 0.45, 0.25, { discount: true });
+  add(sameGenres.results || [], 0.2, 0.1, { support: true });
+
   return [...found.values()]
-    .map((x) => ({ movie: x.movie, sim: Math.min(1, x.sim + 0.15 * overlap(x.movie.genres, seed.genres || [])) }))
+    .filter((x) => x.solid)
+    .map((x) => ({ movie: x.movie, why: x.why, sim: Math.min(1, x.sim + 0.1 * overlap(x.movie.genres, seedGenres)) }))
     .sort((a, b) => b.sim - a.sim)
     .slice(0, 40);
 }

@@ -14,7 +14,7 @@ const rememberChoice = (voteId, me, movieId) => {
 };
 
 /** A secret ballot on tonight's shortlist. Totals stay hidden until everyone has voted or someone ends it. */
-export default function Vote({ vote, members, me, onCast, onEnd, onClear, onRevote, onSpin, onOpen }) {
+export default function Vote({ vote, members, me, onCast, onEnd, onClear, onRevote, onSpin, onWatch, onOpen }) {
   const [choice, setChoice] = useState(() => myChoice(vote.id, me));
   const [confirmEnd, setConfirmEnd] = useState(false);
   const result = voteResult(vote);
@@ -53,6 +53,7 @@ export default function Vote({ vote, members, me, onCast, onEnd, onClear, onRevo
         </ul>
         <p className="text-xs text-dim">{result.cast} of {result.expected} voted. Votes are secret: only the totals are kept.</p>
         <div className="flex flex-wrap gap-2">
+          {winner && !others.length && <button type="button" onClick={() => onWatch(winner, { voters: vote.voted, votes: result.rows[0].votes })} className="rounded-lg bg-velvet px-4 py-2.5 font-bold text-cream">We're watching this</button>}
           {others.length > 0 && <button type="button" onClick={() => onSpin(result.winners)} className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2.5 font-bold text-house"><Dices size={18} /> Spin the tie</button>}
           <button type="button" onClick={onRevote} className="rounded-lg border border-aisle px-4 py-2.5 text-sm font-bold text-cream">Vote again</button>
           <button type="button" onClick={onClear} className="rounded-lg px-3 py-2.5 text-sm text-dim underline">Close</button>

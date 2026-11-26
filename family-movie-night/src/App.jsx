@@ -11,7 +11,7 @@ import { Avatar, Notice } from './components/ui.jsx';
 import { applyUpdate, watchForUpdates } from './lib/autoUpdate.js';
 import { hasFirebase, pref } from './lib/config.js';
 import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js';
-import { createLocalStore, createSharedStore } from './lib/store.js';
+import { createLocalStore, createSharedStore, newId8, slim } from './lib/store.js';
 import { enrich, needsDetails } from './lib/tmdb.js';
 
 const TABS = [
@@ -91,7 +91,7 @@ export default function App() {
   if (problem) return <Shell><div className="mx-auto max-w-md py-10"><Notice>{problem}</Notice></div></Shell>;
   if (!data) return <Shell><Centered>Loading…</Centered></Shell>;
 
-  const { entries, shortlist, vote } = data;
+  const { entries, shortlist, vote, history } = data;
   const myself = members.find((m) => m.id === me);
   if (!myself) {
     return (
@@ -123,6 +123,18 @@ export default function App() {
   const removeFavorite = (movie) => {
     store.setFavorites(me, favorites.filter((m) => String(m.id) !== String(movie.id)));
     if (entries[movie.id]?.ratings?.[me]?.via === 'favorite') store.setRating(movie, me, null);
+  };
+  // Log a movie night: what, when, how it was chosen and who was there. Anyone who hadn't
+  // already watched it is marked as having watched it (not yet rated), so it stops being suggested.
+  const logWatched = async (picked, via, watcherIds, extra = {}) => {
+    const movie = await enrich(entries[picked.id]?.movie || picked);
+    store.addHistory({ id: newId8(), movie: { ...slim(movie), genres: movie.genres || [] }, at: Date.now(), via, watchers: watcherIds, ...extra });
+    watcherIds.forEach((id) => {
+      const mine = entries[movie.id]?.ratings?.[id];
+      if (!mine || !['seen', 'again'].includes(mine.status)) store.setRating(movie, id, { status: 'seen', stars: null, via: 'watched' });
+    });
+    if (shortlist.some((m) => String(m.id) === String(movie.id))) store.setShortlist(shortlist.filter((m) => String(m.id) !== String(movie.id)));
+    if (vote) store.clearVote();
   };
   const voting = {
     start: (movies, voters) => store.startVote(movies, voters),
@@ -180,7 +192,7 @@ export default function App() {
         />
       ) : (
         <>
-          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
@@ -189,7 +201,7 @@ export default function App() {
       )}
 
       {open && (
-        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} onToggleListed={toggleListed} onSave={rate} onClose={() => setOpen(null)} />
+        <RateSheet key={open.id} movie={open} entry={entries[open.id]} members={members} me={me} listed={listed(open)} onToggleListed={toggleListed} onWatched={(movie) => logWatched(movie, 'pick', present.map((m) => m.id))} onSave={rate} onClose={() => setOpen(null)} />
       )}
     </Shell>
   );

@@ -142,4 +142,24 @@ const tied = voteResult({ options, voters: ['a', 'b', 'c'], voted: ['a', 'b'], t
 assert.equal(tied.winners.length, 2);
 assert.equal(tied.everyoneIn, false);
 assert.equal(voteResult({ options, voters: ['a'], voted: [], tally: {} }).winners.length, 0);
+
+// Someone has seen it and doesn't want it again: it drops well below an otherwise equal movie.
+const seenOne = suggest({
+  1: { movie: movie(1, 'Fresh For All', ['Drama']), ratings: { a: want, b: want } },
+  2: { movie: movie(2, 'B Has Seen It', ['Drama']), ratings: { a: want, b: seen(5) } },
+  3: { movie: movie(3, 'B Would Rewatch', ['Drama']), ratings: { a: want, b: again(5) } },
+}, ['a', 'b']);
+assert.deepEqual(seenOne.map((e) => e.movie.title), ['B Would Rewatch', 'Fresh For All', 'B Has Seen It']);
+assert.ok(seenOne[1].rank - seenOne[2].rank >= 30, 'the penalty is large');
+assert.equal(seenOne[2].alreadySeen, 1);
+// A discovery is still offered when someone only shrugged at it, but not if anyone watched it.
+const shrugged = { 5: { movie: movie(5, 'Shrugged', ['Drama']), ratings: { a: meh } }, 6: { movie: movie(6, 'Watched', ['Drama']), ratings: { a: seen(4) } } };
+const offered = suggest(shrugged, ['a', 'b'], { discoveries: [{ movie: movie(5, 'Shrugged', ['Drama']), sim: 0.8 }, { movie: movie(6, 'Watched', ['Drama']), sim: 0.8 }] });
+assert.deepEqual(offered.map((e) => e.movie.title), ['Shrugged']);
+
+// Real stars always win over a leftover mark from a ranking, favourite or "watched" entry.
+assert.equal(shownStars({ status: 'seen', stars: 4, via: 'watched' }), 4);
+assert.equal(shownStars({ status: 'seen', stars: 3.5, via: 'rank', like: 5 }), 3.5);
+assert.equal(liking({ status: 'seen', stars: 3.5, via: 'rank', like: 5 }), 3.5);
+assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
 console.log('\nAll suggestion checks passed.');

@@ -9,8 +9,16 @@
 //
 // A movie may carry crew: [{ id, name, role: 'director' | 'writer' }].
 
-/** Stars the person actually gave. Rank 5 results and favourites have none, whatever they store internally. */
-export const shownStars = (r) => (r && !r.via && typeof r.stars === 'number' && r.stars > 0 ? r.stars : null);
+/**
+ * Stars the person actually gave. Rank 5 results, favourites and "watched, not rated yet" have
+ * none. (A rating can carry a leftover `via` mark alongside real stars if it was saved by an
+ * older version of the app; real stars win. The one exception is an early Rank 5 save, which
+ * stored its hidden signal in `stars` and has no `like`.)
+ */
+export const shownStars = (r) => {
+  if (!r || typeof r.stars !== 'number' || r.stars <= 0) return null;
+  return r.via === 'rank' && typeof r.like !== 'number' ? null : r.stars;
+};
 
 /** How much the person liked it, 0–5: their stars, or the hidden signal from a ranking. */
 export const liking = (r) => {
@@ -98,6 +106,9 @@ export const qualityNudge = (movie) => {
   return q == null ? 0 : Math.max(-1, Math.min(1, (q - 65) / 35)) * 4;
 };
 
+/** Points taken off a movie for each person watching who has seen it and didn't mark Watch again. */
+const ALREADY_SEEN_PENALTY = 30;
+
 /** One person's enthusiasm for one movie, 0–100, or a veto. */
 function memberScore(rating, profile, movie) {
   if (!rating) return { kind: 'guess', score: predictStars(profile, movie) * 20 * 0.85 };
@@ -116,7 +127,7 @@ function memberScore(rating, profile, movie) {
  *
  *   wanted — nobody present ruled it out and at least one person present marked it Want to
  *            or Watch again.
- *   new    — a discovery (from `discoveries`): nobody present has watched it or ruled it out,
+ *   new    — a discovery (from `discoveries`): nobody present has watched it, listed it or ruled it out,
  *            and it resembles what they love or comes from a director or writer they like.
  *
  * With `similar` (from "Movies like…") the list is instead the movies similar to the seeds:
@@ -126,6 +137,7 @@ function memberScore(rating, profile, movie) {
  * one. The group score favours picks nobody will hate. Then:
  *   new movies     — 75% group score, 25% how closely they match the group's interests
  *   similar        — 65% group score, 35% similarity to the seeds
+ *   already seen   — minus 30 for each person watching who has seen it and didn't mark Watch again
  *   reviews        — a nudge of up to 4 points either way for the critic score
  *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
  *
@@ -141,9 +153,9 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
     ? similar.map((x) => ({ entry: entries[x.movie.id] || { movie: x.movie, ratings: {} }, sim: x.sim }))
     : [
       ...Object.values(entries).map((entry) => ({ entry })),
-      // Discoveries: only movies none of the people present have any answer for.
+      // Discoveries: only movies none of the people present have watched (or already listed, or ruled out).
       ...discoveries
-        .filter((d) => !presentIds.some((id) => entries[d.movie.id]?.ratings?.[id]))
+        .filter((d) => !presentIds.some((id) => ['seen', 'again', 'unseen', 'pass'].includes(entries[d.movie.id]?.ratings?.[id]?.status)))
         .map((d) => ({ entry: { movie: entries[d.movie.id]?.movie || d.movie, ratings: entries[d.movie.id]?.ratings || {} }, sim: d.sim, because: d.because, fresh: true })),
     ];
 
@@ -161,6 +173,10 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
     if (seeded) raw = raw * 0.65 + sim * 100 * 0.35;
     else if (fresh) raw = raw * 0.75 + sim * 100 * 0.25;
 
+    // Someone here has already watched it and didn't ask to see it again: push it well down.
+    const alreadySeen = parts.filter((p) => p.kind === 'seen').length;
+    raw -= ALREADY_SEEN_PENALTY * alreadySeen;
+
     raw += qualityNudge(entry.movie); // better-reviewed movies edge ahead, only a little
 
     const vibes = priorityGenres.filter((g) => (entry.movie.genres || []).includes(g));
@@ -175,6 +191,7 @@ export function suggest(entries, presentIds, { priorityGenres = [], similar = []
       parts,
       wanting: wanting.length,
       rewatch: parts.some((p) => p.kind === 'again' || p.kind === 'seen'),
+      alreadySeen,
       sim,
       vibes,
     });

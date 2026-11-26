@@ -10,7 +10,7 @@ import { byPerson, enrich, similarTo } from './tmdb.js';
 const SEEDS_PER_PERSON = 3;
 const MAX_SEEDS = 6;
 const MAX_PEOPLE = 4;
-const DETAIL_TOP = 30;
+const DETAIL_TOP = 25;
 
 const cache = new Map();
 const once = (key, load) => {
@@ -48,10 +48,11 @@ export async function discover(entries, members, presentIds) {
     Promise.all(people.map((person) => once(`by:${person.id}`, () => byPerson(person)).catch(() => []))),
   ]);
 
+  const reason = (why, seed) => (why === 'series' ? `same series as ${seed.title}` : why === 'director' ? `from the director of ${seed.title}` : `like ${seed.title}`);
   const because = new Map();
-  similarLists.forEach((list, n) => list.forEach(({ movie, sim }) => {
+  similarLists.forEach((list, n) => list.forEach(({ movie, sim, why }) => {
     const prev = because.get(String(movie.id));
-    if (!prev || sim > prev.sim) because.set(String(movie.id), { sim, text: `like ${seeds[n].title}` });
+    if (!prev || sim > prev.sim) because.set(String(movie.id), { sim, text: reason(why, seeds[n]) });
   }));
   const merged = mergeSimilar(similarLists, seeds.map((s) => s.id));
   const pool = new Map(merged.map((x) => [String(x.movie.id), { ...x, because: because.get(String(x.movie.id))?.text }]));
@@ -66,7 +67,7 @@ export async function discover(entries, members, presentIds) {
     pool.set(key, prev ? { ...prev, sim: Math.min(1, Math.max(prev.sim, strength) + 0.1), because: text } : { movie, sim: strength, because: text });
   }));
 
-  const ranked = [...pool.values()].sort((a, b) => b.sim - a.sim).slice(0, 60);
+  const ranked = [...pool.values()].sort((a, b) => b.sim - a.sim).slice(0, 45);
   // Fill in rating, runtime and crew for the best matches so filters and predictions work.
   const detailed = await Promise.all(ranked.slice(0, DETAIL_TOP).map((x) => once(`detail:${x.movie.id}`, () => enrich(x.movie)).then((movie) => ({ ...x, movie })).catch(() => x)));
   return [...detailed, ...ranked.slice(DETAIL_TOP)];

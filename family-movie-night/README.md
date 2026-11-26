@@ -167,7 +167,9 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
   - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
   - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, with everyone's vetoes still applied.
 
-  Put movies on the shared shortlist with **+**, then choose together, **Spin**, or hold a **Secret vote** (below). Filters (MPAA rating, genre, runtime) are behind the Filters button.
+  The list shows the top 20, with **Show more** underneath. Put movies on the shared shortlist with **+**, then choose together, **Spin**, or hold a **Secret vote** (below). Filters (MPAA rating, genre, runtime) are behind the Filters button.
+
+  **History** (top right of Tonight) is the log of past movie nights: the movie, the date, how it was chosen (vote, spin or picked), who voted, and who watched. Tap **We're watching this** on a vote result or spin, or **We watched this** on any movie, to log a night. Afterwards each person can give the movie a score from the History page; the entry shows everyone's score and the average.
 - **Rate** — two modes, switched at the top:
   - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
   - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**. No stars are assigned; it only teaches the app your taste.
@@ -201,9 +203,11 @@ It is anonymous by construction: the app stores who has voted and how many votes
 **What Tonight shows.** A movie makes the list only if nobody present ruled it out (a No thanks, or 1–2 stars without Watch again) and it is either:
 
 1. **wanted** — at least one person present marked it Want to or Watch again, or
-2. **new** — no one present has any answer for it, and it came from the discovery pool: movies similar to up to three favourites or top-rated movies per person, plus other movies by their liked directors and writers.
+2. **new** — no one present has watched it or said no to it, and it came from the discovery pool: movies similar to up to three favourites or top-rated movies per person, plus other movies by their liked directors and writers.
 
 Movies people have simply watched no longer appear.
+
+**Already seen.** If anyone present has watched a movie and didn't ask to watch it again, it loses 30 points, which drops it below nearly everything nobody has seen. It only still shows because someone else present wants it.
 
 Each present person then contributes a score out of 100: Want to 92, Watch again 20 per star, Don't care 55, watched without wanting a rewatch 10 per star, and for anyone who hasn't rated it, their predicted stars (discounted 15% for being a guess). The match % is 70% the group average plus 30% the least-keen person's score, so a pick everyone is fine with beats one that one person loves and another shrugs at. New movies are scored 75% on that group score and 25% on how closely they match the group's interests, and always sit below the wanted ones.
 
@@ -211,7 +215,7 @@ People who aren't watching tonight don't count, including their vetoes.
 
 **In the mood for.** Each priority genre a movie matches adds to its score: +15 for the first, +5 for each further one, up to +25. It changes the order, never what's shown.
 
-**Movies like….** For each reference movie the app pulls four lists from TMDB: its recommendations, well-known movies sharing all its genres, well-known movies sharing its lead genre and any of its keywords, and its "similar" list. Each movie gets a similarity from 0 to 1; appearing in several lists, or being similar to several reference movies, raises it, and obscure titles are discounted. The list then shows only those similar movies, scored 65% group score and 35% similarity. Rule 2 above is dropped (nobody needs to have asked for them), rule 1 still applies, and a movie everyone present has already watched is left out.
+**Movies like….** For each reference movie the app looks for, strongest first: other movies in the same series, TMDB's recommendations, other movies by the same director, well-known movies sharing its themes (keywords), and TMDB's "similar" list. Sharing only a genre and decade never gets a movie in by itself; it can only strengthen one that qualified another way. Each movie gets a similarity from 0 to 1, raised when several signals agree or when it matches several reference movies, and each says why it's there ("same series as…", "from the director of…"). The list then shows only those movies, scored 65% group score and 35% similarity. Rule 2 above is dropped (nobody needs to have asked for them), rule 1 still applies, and a movie everyone present has already watched is left out. The same engine fills the new-to-us list from each person's favourites.
 
 **Rank 5 → taste, not stars.** A submitted ranking does not give any movie a star rating. Each movie is saved as "watched" with a hidden taste signal on the same 0–5 scale the taste profile uses: 5, 4.5, 3.5, 3, 2.5 from top to bottom. That number is never displayed; ranked movies show as "Watched · ranked". It feeds "Your taste so far" and the predictions exactly as a star rating would. Last place is 2.5 on purpose, above the veto line. Tapping **Never again** saves 1.5 instead, which does rule the movie out. Opening a ranked movie and giving it stars replaces the ranking with a normal rating.
 
@@ -230,6 +234,13 @@ groups/family                         ← the one shared space for this site
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
   ai: { day: "2026-11-26", count: 7 }     // assistant questions asked today
+  history: [                              // past movie nights, newest first
+    { id: "h1a2b3c4", at: 1795700000000,  // when (ms)
+      movie: { …movie },
+      via: "vote",                        // vote | spin | pick
+      voters:   [ "k3x9q2ab", "p7m1zz0c" ],   // who voted (never what they chose)
+      watchers: [ "k3x9q2ab", "p7m1zz0c" ] }  // who watched
+  ]                                       // scores live in the movie's ratings, below
   vote: {                               // the current secret vote, if any
     id: "x1y2z3", open: true,
     options: [ { id, title, year, poster }, … ],
@@ -260,6 +271,7 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     "p7m1zz0c": { status: "unseen", stars: null }   // a missing id = hasn't rated it
     // from Rank 5:  { status: "seen", stars: null, like: 4.5, via: "rank", place: 2, of: 5 }
     // a favourite:  { status: "seen", stars: null, like: 5, via: "favorite" }
+    // logged from a movie night, not scored yet:  { status: "seen", stars: null, via: "watched" }
     //   (like = hidden taste signal, never shown as stars)
     // status is one of: seen | again | unseen | meh | pass
   }
@@ -288,6 +300,7 @@ src/
     demoData.js             the built-in movie list (no ratings)
   components/
     Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
+    History.jsx             past movie nights and after-the-movie scores
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
     Ask.jsx                 the assistant chat
     Vote.jsx                the secret vote panel and result

@@ -125,7 +125,7 @@ export default function Rank({ entries, me, onRate }) {
                   <span className="font-display text-lg leading-none text-gold">{place + 1}</span>
                   <span className="line-clamp-2 font-bold leading-tight text-cream">{movie.title}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-dim"><ScoreBadge movie={movie} /><span className="truncate">{movie.year} · {(movie.genres || []).slice(0, 2).join(', ')}</span></div>
+                <div className="mt-0.5 flex items-center gap-2 text-xs text-dim"><ScoreBadge movie={movie} /><span className="truncate">{movie.year} · {(movie.genres || []).slice(0, 2).join(', ')}</span></div>
                 {slot.flagged && <div className="mt-0.5 text-xs text-dim">Never again: this one gets ruled out</div>}
               </div>
               <div className="flex flex-col justify-between">

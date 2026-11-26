@@ -156,8 +156,8 @@ function QuickSwipe({ entries, me, onRate }) {
           <div className="w-44"><Poster movie={movie} size="w500" className="shadow-xl shadow-black/60" /></div>
           <div className="flex flex-col items-center gap-1 text-center">
             <h2 className="text-xl font-bold leading-tight text-cream">{movie.title}</h2>
+            <ScoreBadge movie={movie} size="lg" className="my-1" />
             <div className="flex items-center gap-2 text-sm text-dim">
-              <ScoreBadge movie={movie} />
               <span className="tabular-nums">{movie.year}</span>
               <CertBadge cert={movie.cert} />
               <span className="tabular-nums">#{position} of {movies.length}</span>

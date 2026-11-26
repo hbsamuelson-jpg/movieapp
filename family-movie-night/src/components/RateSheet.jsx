@@ -42,8 +42,8 @@ export default function RateSheet({ movie: initial, entry, members, me, listed, 
               <h2 className="text-xl font-bold leading-tight text-cream">{movie.title}</h2>
               <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 rounded-full p-2 text-dim hover:bg-aisle hover:text-cream"><X size={20} /></button>
             </div>
+            <ScoreBadge movie={movie} size="lg" className="self-start" />
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-dim">
-              <ScoreBadge movie={movie} />
               {movie.year && <span className="tabular-nums">{movie.year}</span>}
               <CertBadge cert={movie.cert} />
               {movie.runtime && <span className="tabular-nums">{formatRuntime(movie.runtime)}</span>}

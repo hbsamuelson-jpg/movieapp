@@ -124,14 +124,21 @@ export const directedBy = (movie) => {
   return names.length ? `Directed by ${names.join(' & ')}` : null;
 };
 
-/** The review score: Rotten Tomatoes when the app has it, otherwise the TMDB audience score, labelled as such. */
-export function ScoreBadge({ movie, className = '' }) {
+/**
+ * The review score as a badge: Rotten Tomatoes when the app has it, otherwise the TMDB audience
+ * score, labelled as such. Red means a Rotten Tomatoes score of 60 or more; grey means lower.
+ * size: 'sm' for list rows, 'lg' for the card or sheet you're rating from.
+ */
+export function ScoreBadge({ movie, size = 'sm', className = '' }) {
   const score = quality(movie);
   if (score == null) return null;
   const isRt = typeof movie.rt === 'number';
+  const tone = !isRt ? 'border border-aisle text-dim' : score >= 60 ? 'bg-velvet text-white' : 'bg-aisle text-cream';
+  const shape = size === 'lg' ? 'gap-2 rounded-lg px-3 py-1.5' : 'gap-1 rounded px-1.5 py-0.5';
   return (
-    <span className={`shrink-0 whitespace-nowrap tabular-nums ${isRt && score >= 60 ? 'font-bold text-cream' : 'text-dim'} ${className}`} title={isRt ? 'Rotten Tomatoes critics score' : 'TMDB audience score (no Rotten Tomatoes score available)'}>
-      {isRt ? 'RT' : 'TMDB'} {score}%
+    <span className={`inline-flex shrink-0 items-baseline whitespace-nowrap ${shape} ${tone} ${className}`} title={isRt ? 'Rotten Tomatoes critics score' : 'TMDB audience score (no Rotten Tomatoes score available)'}>
+      <span className={`font-bold uppercase tracking-wide opacity-80 ${size === 'lg' ? 'text-xs' : 'text-[9px]'}`}>{isRt ? (size === 'lg' ? 'Rotten Tomatoes' : 'RT') : 'TMDB'}</span>
+      <span className={`font-bold tabular-nums leading-none ${size === 'lg' ? 'text-2xl' : 'text-sm'}`}>{score}%</span>
     </span>
   );
 }
@@ -175,7 +182,7 @@ export function MovieRow({ movie, index, onOpen, note, aside, action }) {
             <span className="truncate font-bold text-cream">{movie.title}</span>
             <CertBadge cert={movie.cert} />
           </span>
-          <span className="flex items-center gap-1.5 text-xs text-dim">
+          <span className="mt-0.5 flex items-center gap-2 text-xs text-dim">
             <ScoreBadge movie={movie} />
             <span className="truncate">{facts.join(' · ')}</span>
           </span>

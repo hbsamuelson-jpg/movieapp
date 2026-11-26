@@ -1,11 +1,29 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInAnonymously, signInWithPopup, signOut } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { connectAuthEmulator, getAuth, GoogleAuthProvider, onAuthStateChanged, signInAnonymously, signInWithPopup, signOut } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { firebaseConfig, hasFirebase } from './config.js';
 
 const app = hasFirebase ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
+/**
+ * The database keeps a copy of everything it has read on the device (in the browser's IndexedDB),
+ * shared between tabs. That copy is what lets the app ask the server only for what changed since
+ * last time instead of re-reading every movie on every visit (see store.js). Where the browser
+ * has no IndexedDB (some private windows), Firebase falls back to an in-memory copy by itself.
+ */
+function openDb() {
+  try {
+    return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  } catch {
+    return getFirestore(app);
+  }
+}
+export const db = app ? openDb() : null;
+// Local testing against the Firebase emulators (npm run emulators), never the real project.
+if (app && import.meta.env.VITE_EMULATOR === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+}
 
 /**
  * Two kinds of session, both allowed by the database rules:

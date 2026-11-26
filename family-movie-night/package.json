@@ -9,7 +9,8 @@
     "build:single": "SINGLE_FILE=1 vite build --outDir dist-single",
     "preview": "vite preview",
     "deploy": "vite build && firebase deploy --only hosting",
-    "test": "node tests/suggest.test.mjs"
+    "test": "node tests/suggest.test.mjs",
+    "emulators": "npx firebase-tools emulators:start --only firestore,auth --project demo-movie-night"
   },
   "dependencies": {
     "firebase": "^11.0.0",

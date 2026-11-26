@@ -21,8 +21,8 @@
 // The local store keeps everything in one browser. The shared store keeps it in Firestore,
 // so every device that opens the site sees the same names, ratings and shortlist.
 
-import { arrayUnion, collection, deleteField, doc, FieldPath, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { spaceId as defaultSpace } from './config.js';
+import { arrayUnion, collection, deleteField, doc, FieldPath, getDocsFromCache, increment, onSnapshot, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { pref, spaceId as defaultSpace } from './config.js';
 import { db } from './firebase.js';
 import { voteDeltas } from './votes.js';
 
@@ -119,6 +119,11 @@ export function createLocalStore() {
   };
 }
 
+const FULL_SYNC_EVERY = 7 * 24 * 60 * 60 * 1000;
+/** For checking how much the app reads: how the movie list was loaded and how many movies came from the server. */
+export const stats = { mode: null, serverDocs: 0 };
+if (typeof window !== 'undefined') window.__fmnSync = stats;
+
 /** One shared space per site. Everyone who opens the site lands in it. */
 export function createSharedStore(spaceId = defaultSpace) {
   const space = doc(db, 'groups', spaceId);
@@ -141,15 +146,51 @@ export function createSharedStore(spaceId = defaultSpace) {
         head = { members, shortlist: data.shortlist || [], vote: currentVote, history, services: data.services || [] };
         emit();
       }, onError);
-      const stopMovies = onSnapshot(movies, (snap) => {
+
+      // Movies. Reading the whole collection costs one database read per movie, on every visit,
+      // on every phone. So after one full read, a device keeps its copy and from then on asks
+      // only for movies changed since the newest one it has (every write stamps `updatedAt`).
+      // A full read is repeated weekly as a safety net.
+      const syncKey = `synced:${spaceId}`;
+      const all = {};
+      let stopMovies = () => {};
+      let stopped = false;
+      const publish = () => {
         entries = {};
-        snap.forEach((d) => {
-          const data = d.data();
-          if (data.ratings && Object.keys(data.ratings).length) entries[d.id] = data;
-        });
+        for (const [id, data] of Object.entries(all)) if (data.ratings && Object.keys(data.ratings).length) entries[id] = data;
         emit();
-      }, onError);
-      return () => { stopSpace(); stopMovies(); };
+      };
+      const count = (snap) => { if (!snap.metadata.fromCache) stats.serverDocs += snap.docChanges().length; };
+      const listenToAll = () => {
+        stats.mode = 'full';
+        stopMovies = onSnapshot(movies, { includeMetadataChanges: true }, (snap) => {
+          count(snap);
+          for (const id of Object.keys(all)) delete all[id];
+          snap.forEach((d) => { all[d.id] = d.data(); });
+          publish();
+          if (!snap.metadata.fromCache) pref.set(syncKey, Date.now()); // the device's copy is complete as of now
+        }, onError);
+      };
+      const listenToChanges = async () => {
+        const cached = await getDocsFromCache(movies);
+        if (stopped) return;
+        if (!cached.size) { listenToAll(); return; }
+        let newest = 0;
+        cached.forEach((d) => { all[d.id] = d.data(); newest = Math.max(newest, d.data().updatedAt?.toMillis?.() || 0); });
+        publish();
+        stats.mode = 'changes';
+        // Ten minutes of overlap covers a write that was in flight during the last visit.
+        const since = Timestamp.fromMillis(Math.max(0, newest - 10 * 60 * 1000));
+        stopMovies = onSnapshot(query(movies, where('updatedAt', '>', since)), (snap) => {
+          count(snap);
+          snap.docChanges().forEach((change) => { if (change.type !== 'removed') all[change.doc.id] = change.doc.data(); });
+          publish();
+        }, onError);
+      };
+      const lastFull = pref.get(syncKey, 0);
+      if (Date.now() - lastFull < FULL_SYNC_EVERY) listenToChanges().catch(() => { if (!stopped) listenToAll(); });
+      else listenToAll();
+      return () => { stopped = true; stopSpace(); stopMovies(); };
     },
     addMember(name, uid = null) {
       // A name that already exists is reused only if nobody has linked it to a Google account.
@@ -183,7 +224,7 @@ export function createSharedStore(spaceId = defaultSpace) {
       );
     },
     updateMovie(movie) {
-      return setDoc(doc(movies, String(movie.id)), { movie }, { merge: true });
+      return setDoc(doc(movies, String(movie.id)), { movie, updatedAt: serverTimestamp() }, { merge: true });
     },
     setShortlist(shortlist) {
       return setDoc(space, { shortlist }, { merge: true });

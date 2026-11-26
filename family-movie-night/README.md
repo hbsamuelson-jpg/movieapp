@@ -220,7 +220,9 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Favourite genres on Stats.** Each person's favourite genres (up to three) come from the same taste profile the suggestions use, which counts star ratings, Rank 5 results and all-time favourites. Someone who has only ranked movies still gets favourite genres; the line under their name shows how many they've rated and ranked.
 
-**Ask for anything to rank.** Rank 5 has the same AI box as Quick Swipe: type a request ("Pixar movies", "90s action", "best picture winners") and the five on the table are dealt from that list, in the AI's order, until it runs out or you close it. It asks for 15 so there are spares when you kick out ones you haven't seen. Movies you've already rated or ranked are left out. Each list counts as one of the day's assistant questions.
+**Rank (formerly Rank 5).** The tab is now just **Rank**, and you choose how many to rank at a time: 3, 5, 8 or 10 (remembered per device). The page is sized to the window so it doesn't scroll: on a computer the controls sit on the left and the list fills the height on the right; rows get more compact as the count goes up. On a phone, 3 and 5 fit without scrolling; 8 and 10 may scroll on smaller phones because rows are kept big enough to tap.
+
+**Ask for anything to rank.** Rank has the same AI box as Quick Swipe: type a request ("Pixar movies", "90s action", "best picture winners") and the five on the table are dealt from that list, in the AI's order, until it runs out or you close it. It asks for 15 so there are spares when you kick out ones you haven't seen. Movies you've already rated or ranked are left out. Each list counts as one of the day's assistant questions.
 
 **Rank 5.** Reorder by dragging a row by its poster (mouse or finger) or with the arrows. **Haven't seen** swaps the movie for another and saves it as "haven't seen", so Rank 5 never deals it to you again. That answer carries no opinion: the movie can still be suggested, still shows up in Quick Swipe for a Want to / Don't care / No thanks answer, and is listed under Haven't seen on Mine.
 

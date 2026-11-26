@@ -10,7 +10,7 @@ const PER_YEAR = [5, 10, 20];
 // Arrow keys for the three "haven't watched it" answers, laid out like the buttons: left, middle, right.
 const ARROWS = { ArrowLeft: 'unseen', ArrowDown: 'meh', ArrowRight: 'pass' };
 const ARROW_GLYPH = { unseen: '←', meh: '↓', pass: '→' };
-const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank 5']];
+const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank']];
 
 /** Two ways to teach the app your taste: one poster at a time, or ranking a varied batch of five. */
 export default function Rate({ entries, me, onRate }) {
@@ -23,7 +23,7 @@ export default function Rate({ entries, me, onRate }) {
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => choose(id)} className={`rounded-full py-2 text-sm font-bold transition ${mode === id ? 'bg-gold text-house' : 'text-dim hover:text-cream'}`}>{label}</button>
         ))}
       </div>
-      {mode === 'swipe' ? <QuickSwipe entries={entries} me={me} onRate={onRate} /> : <div className="flex flex-col gap-4 lg:mx-auto lg:w-full lg:max-w-3xl"><Rank entries={entries} me={me} onRate={onRate} /></div>}
+      {mode === 'swipe' ? <QuickSwipe entries={entries} me={me} onRate={onRate} /> : <Rank entries={entries} me={me} onRate={onRate} />}
     </div>
   );
 }

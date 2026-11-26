@@ -126,7 +126,7 @@ export default function Stats({ entries, members, history, me, onBack, onOpen })
       )}
 
       <Card title="Each person">
-        <p className="-mt-1 text-xs text-dim">Favourite genres use everything the app knows: star ratings, Rank 5 results, all-time favourites and their genre ranking.</p>
+        <p className="-mt-1 text-xs text-dim">Favourite genres use everything the app knows: star ratings, rankings, all-time favourites and their genre ranking.</p>
         <ul className="flex flex-col gap-3">
           {s.people.map((p) => (
             <li key={p.member.id} className="flex items-center gap-3">

@@ -121,12 +121,11 @@ export function predictStars(profile, movie) {
 }
 
 /**
- * The review score to rank by, 0–100: Rotten Tomatoes when known, then Metacritic, then the
+ * The review score to rank by, 0–100: Rotten Tomatoes when known, otherwise the
  * TMDB audience score.
  */
 export const quality = (movie) => {
   if (typeof movie.rt === 'number') return movie.rt;
-  if (typeof movie.mc === 'number') return movie.mc;
   return movie.vote ? Math.round(movie.vote * 10) : null;
 };
 

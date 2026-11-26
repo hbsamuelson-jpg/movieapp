@@ -121,7 +121,7 @@ The app gets critic scores through OMDb, which needs its own free key:
 2. In Vercel → Settings → Environment Variables, add `VITE_OMDB_API_KEY` with that key. Like the TMDB key, this one is read by the browser, so choose **Config** if Vercel asks.
 3. Redeploy.
 
-**What you actually get.** Rotten Tomatoes has no public API, and OMDb, which used to relay the Tomatometer, currently returns a **Metacritic** score for most movies and no Rotten Tomatoes score (checked November 2026 against several well-known titles). So in practice the badge reads **Metacritic 82**. The app still asks for both and will show **Rotten Tomatoes 97%** for any movie OMDb does supply one for. With no key, or no critic score at all, it shows the TMDB audience score, labelled **TMDB 78%**.
+**What you actually get.** Rotten Tomatoes has no public API. OMDb relays the Tomatometer for some movies only, so set `VITE_MDBLIST_API_KEY` as well (see "Rotten Tomatoes scores (MDBList)" below) to get it for nearly every movie. The badge reads **Rotten Tomatoes 97%** when the app has that score and **TMDB 78%** (the TMDB audience score) when it doesn't. Metacritic is never shown or used.
 
 The free OMDb key allows a limited number of lookups per day (1,000 at the time of writing). The app keeps that low: each answer is cached on the device, and saved with the movie once anyone rates it. If the limit is hit, new movies fall back to TMDB scores until the next day.
 
@@ -240,11 +240,11 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Testing without the real database.** `npm run emulators` starts local Firebase emulators (needs Java); build with `VITE_EMULATOR=true` and any placeholder Firebase values to point the app at them. Nothing in that mode touches the real project or its daily limit.
 
-**Rotten Tomatoes scores (MDBList).** With `VITE_MDBLIST_API_KEY` set (free key from mdblist.com → Preferences → API Access, 1,000 lookups a day), the app asks MDBList first for each movie's scores. One lookup returns the Rotten Tomatoes and Metacritic scores, the movie's own Rotten Tomatoes address and Common Sense Media's recommended age. So the badge shows Rotten Tomatoes for nearly every movie, the title links straight to the movie's Rotten Tomatoes page, and the Common Sense Media link shows "age 14+" when they've reviewed it. OMDb stays as the fallback when MDBList's daily limit is reached or it doesn't know a movie; a failed lookup never wipes a score already saved. Movies rated before the key was added are looked up again in the background, a few at a time.
+**Rotten Tomatoes scores (MDBList).** With `VITE_MDBLIST_API_KEY` set (free key from mdblist.com → Preferences → API Access, 1,000 lookups a day), the app asks MDBList first for each movie's scores. One lookup returns the Rotten Tomatoes score, the movie's own Rotten Tomatoes address and Common Sense Media's recommended age. So the badge shows Rotten Tomatoes for nearly every movie, the title links straight to the movie's Rotten Tomatoes page, and the Common Sense Media link shows "age 14+" when they've reviewed it. OMDb stays as the fallback when MDBList's daily limit is reached or it doesn't know a movie; a failed lookup never wipes a score already saved. Movies rated before the key was added are looked up again in the background, a few at a time.
 
 **Title links.** On a movie's detail sheet and on the Quick Swipe card, the title opens Rotten Tomatoes in a new tab. It goes to their search results for that title (the movie is the top result), because nothing the app has access to gives a movie's exact Rotten Tomatoes address.
 
-**Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise its Metacritic score, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
+**Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise the TMDB audience score. Metacritic scores are not shown or used anywhere. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
 
 **Directors and writers.** Movie details include the director(s) and up to two writers. For each person the app tracks who is behind the movies they rated 4 or higher; anyone who shows up twice (or once on an all-time favourite) becomes a "keeps liking" name. A movie by one of them gets half a star added to that person's predicted rating, and their other well-known movies are pulled into Tonight's new-to-us list. Movies rated before this existed get their credits filled in quietly in the background.
 
@@ -314,7 +314,7 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     overview: "…",
     crew: [ { id: 1, name: "Robert Zemeckis", role: "director" }, … ],  // director(s) + up to 2 writers
     imdb: "tt0088763",
-    rt: null, mc: 88,                 // Rotten Tomatoes and Metacritic scores, 0–100 or null
+    rt: 92,                           // Rotten Tomatoes score, 0–100 or null (an old `mc` Metacritic field may exist; it is ignored)
     release: "2017-11-22",            // release date; a wanted movie stays off Tonight until then
     scored: 2,                        // critic-score lookup done (version number)
     watch: { v: 2, at: 1795700000000,                       // US availability, and when it was checked

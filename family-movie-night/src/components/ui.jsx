@@ -127,16 +127,15 @@ export const directedBy = (movie) => {
 
 /**
  * The review score as a badge. Shows the best source the app has for the movie:
- *   Rotten Tomatoes (red at 60%+), else Metacritic (gold at 61+), else the TMDB audience score.
+ *   Rotten Tomatoes (red at 60%+), else the TMDB audience score. Metacritic is never shown.
  * size: 'sm' for list rows, 'lg' for the card or sheet you're rating from.
  */
 export function ScoreBadge({ movie, size = 'sm', className = '' }) {
   const score = quality(movie);
   if (score == null) return null;
-  const source = typeof movie.rt === 'number' ? 'rt' : typeof movie.mc === 'number' ? 'mc' : 'tmdb';
+  const source = typeof movie.rt === 'number' ? 'rt' : 'tmdb';
   const look = {
     rt: { long: 'Rotten Tomatoes', short: 'RT', unit: '%', tone: score >= 60 ? 'bg-velvet text-white' : 'bg-aisle text-cream', title: 'Rotten Tomatoes critics score' },
-    mc: { long: 'Metacritic', short: 'MC', unit: '', tone: score >= 61 ? 'bg-gold text-house' : 'bg-aisle text-cream', title: 'Metacritic critics score, out of 100' },
     tmdb: { long: 'TMDB', short: 'TMDB', unit: '%', tone: 'border border-aisle text-dim', title: 'TMDB audience score (no critics score available)' },
   }[source];
   const shape = size === 'lg' ? 'gap-2 rounded-lg px-3 py-1.5' : 'gap-1 rounded px-1.5 py-0.5';

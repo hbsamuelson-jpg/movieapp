@@ -119,7 +119,7 @@ assert.equal(tonight.find((e) => e.lane === 'new').because, 'like Everyone Wants
 
 // Review scores: Rotten Tomatoes wins when known; the nudge is small and capped.
 assert.equal(quality({ rt: 93, vote: 6 }), 93);
-assert.equal(quality({ rt: null, mc: 82, vote: 7.8 }), 82, 'Metacritic is the fallback critic score');
+assert.equal(quality({ rt: null, mc: 82, vote: 7.8 }), 78, 'Metacritic is never used: no Rotten Tomatoes score means the TMDB audience score');
 assert.equal(quality({ rt: null, vote: 7.8 }), 78);
 assert.equal(quality({}), null);
 assert.equal(qualityNudge({ rt: 100 }), 4);

@@ -8,8 +8,7 @@ import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, P
 const RUNTIMES = [[0, 'Any length'], [90, '90 min or less'], [105, '1h 45m or less'], [120, '2 hours or less']];
 
 /** Who's here, what the app suggests for them, and the shortlist you put up for a choice or a spin. */
-export default function Tonight({ entries, members, me, shortlist, onShortlist, onOpen, onRate }) {
-  const [away, setAway] = useState([]); // ids of people not watching tonight
+export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, onOpen, onRate }) {
   const [filters, setFilters] = useState({ genre: '', certs: [], maxRuntime: 0 });
   const [showFilters, setShowFilters] = useState(false);
   const [spinning, setSpinning] = useState(false);
@@ -37,7 +36,7 @@ export default function Tonight({ entries, members, me, shortlist, onShortlist, 
 
   const present = members.filter((m) => !away.includes(m.id));
   const presentIds = present.map((m) => m.id);
-  const toggle = (id) => setAway((a) => (a.includes(id) ? a.filter((x) => x !== id) : present.length > 1 ? [...a, id] : a));
+  const toggle = onToggleAway;
 
   const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar })), [entries, presentIds.join(), vibes, similar, seeking]); // eslint-disable-line react-hooks/exhaustive-deps
   const genres = useMemo(() => [...new Set(ranked.flatMap((e) => e.movie.genres || []))].sort(), [ranked]);

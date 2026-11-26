@@ -113,6 +113,27 @@ Run `npm run deploy` again whenever you change something. `firebase.json` is alr
 
 **On the phones:** open the site and use **Share → Add to Home Screen** (iPhone) or **Install app** (Android). It then opens full-screen like an app and still updates itself.
 
+## The AI assistant (optional)
+
+The **Ask** tab is a chat that knows what everyone watching has rated, wants, and has ruled out. Its suggestions can go straight onto the shortlist.
+
+It needs one more key, and this one is a real secret:
+
+1. Create an API key at https://console.anthropic.com (Settings → API keys). This is billed per use and is separate from any Claude subscription. Add a little credit under Billing.
+2. In Vercel → Settings → Environment Variables, add `ANTHROPIC_API_KEY` with that key. **Leave it as Secret** and do not give it a `VITE_` prefix; the prefix would publish it in the site's code.
+3. Redeploy.
+
+Optional settings, same place: `AI_MODEL` (default `claude-haiku-5-5`, the cheapest; `claude-sonnet-5-5` gives richer answers for more money) and `AI_DAILY_CAP` (default `60` questions a day for the whole group).
+
+How it stays safe:
+
+- The key lives only in `api/assistant.js`, a private function Vercel runs on its servers. The browser never sees it.
+- The function only answers a device with a valid session from this site's Firebase project, and only for a name that exists in the group.
+- A daily question cap is counted on the group document (`ai: { day, count }`).
+- The AI's suggestions are looked up on TMDB before they're shown, so a made-up title drops out, and anything someone watching has ruled out is removed regardless of what the AI said.
+
+What the AI is sent: the first names of the people watching, their favourite genres, and the titles they love, want, or have ruled out, plus the question. Nothing else.
+
 ## How it works
 
 ### People
@@ -125,6 +146,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 
 ### Tabs
 
+- **Ask** — the AI assistant (see above). Shares the who's-watching selection with Tonight.
 - **Tonight** — pick who's watching and see suggestions ranked for exactly those people. Two ways to steer it:
   - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
   - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, ranked for the people present, with everyone's vetoes still applied.
@@ -178,6 +200,7 @@ groups/family                         ← the one shared space for this site
     "p7m1zz0c": { name: "Henry",  joinedAt: timestamp }
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
+  ai: { day: "2026-11-26", count: 7 }     // assistant questions asked today
 
 groups/family/movies/{tmdbId}         ← one document per movie anyone has rated
   movie: {
@@ -207,6 +230,8 @@ Keeping everyone's ratings on one movie document means suggestions come from a s
 ## Project layout
 
 ```
+api/
+  assistant.js              private server function for the AI assistant (holds the secret key)
 src/
   App.jsx                   pick-your-name front door, tabs
   index.css                 theme tokens and animations
@@ -216,11 +241,13 @@ src/
     store.js                on-device store and shared store, same interface
     tmdb.js                 top-of-year decks, eras, similar movies, varied picks, search, details
     suggest.js              taste profiles and suggestions (pure functions)
+    assistant.js            summarises the group for the AI, resolves and vets its picks
     autoUpdate.js           checks for a newer build and reloads into it
     demoData.js             the built-in movie list (no ratings)
   components/
     Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
     Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
+    Ask.jsx                 the assistant chat
     Rank.jsx                Rank 5: kick the unseen, order the rest, submit
     Browse.jsx              search
     Mine.jsx                your ratings and taste summary

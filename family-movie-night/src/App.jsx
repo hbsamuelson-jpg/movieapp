@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Popcorn, Search, Star, Ticket } from 'lucide-react';
+import { Popcorn, Search, Sparkles, Star, Ticket } from 'lucide-react';
+import Ask from './components/Ask.jsx';
 import Browse from './components/Browse.jsx';
 import Group from './components/Group.jsx';
 import Mine from './components/Mine.jsx';
@@ -16,6 +17,7 @@ import { enrich } from './lib/tmdb.js';
 const TABS = [
   { id: 'tonight', label: 'Tonight', icon: Popcorn },
   { id: 'rate', label: 'Rate', icon: Star },
+  { id: 'ask', label: 'Ask', icon: Sparkles },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'mine', label: 'Mine', icon: Ticket },
 ];
@@ -32,6 +34,7 @@ export default function App() {
   const [open, setOpen] = useState(null);
   const [updateReady, setUpdateReady] = useState(false);
   const [signInError, setSignInError] = useState('');
+  const [away, setAway] = useState([]); // ids of people not watching tonight; shared by Tonight and Ask
   const linkAfterSignIn = useRef(null); // a name to link once the Google popup finishes
 
   const ready = !hasFirebase || Boolean(session);
@@ -92,6 +95,9 @@ export default function App() {
     );
   }
 
+  const present = members.filter((m) => !away.includes(m.id));
+  // At least one person always stays in.
+  const toggleAway = (id) => setAway((a) => (a.includes(id) ? a.filter((x) => x !== id) : present.length > 1 ? [...a, id] : a));
   const listed = (movie) => shortlist.some((m) => String(m.id) === String(movie.id));
   const toggleListed = (movie) => store.setShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
   const go = (id) => { setTab(id); setShowGroup(false); };
@@ -108,7 +114,7 @@ export default function App() {
       }
       nav={
         <nav className="shrink-0 border-t border-aisle bg-house" aria-label="Sections">
-          <div className="mx-auto grid max-w-2xl grid-cols-4">
+          <div className="mx-auto grid max-w-2xl grid-cols-5">
             {TABS.map((t) => {
               const on = tab === t.id && !showGroup;
               return (
@@ -137,8 +143,9 @@ export default function App() {
         />
       ) : (
         <>
-          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} onRate={() => go('rate')} />}
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
+          {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
           {tab === 'mine' && <Mine entries={entries} me={me} onOpen={setOpen} onRate={() => go('rate')} />}
         </>

@@ -26,3 +26,6 @@ export const signInWithGoogle = () => signInWithPopup(auth, new GoogleAuthProvid
 
 /** Signing out of Google drops back to an anonymous session (watchSession starts it). */
 export const signOutGoogle = () => signOut(auth);
+
+/** A short-lived proof of this device's session, sent to the assistant so it only answers the app. */
+export const idToken = () => auth.currentUser.getIdToken();

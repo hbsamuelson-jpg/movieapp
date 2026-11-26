@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, SlidersHorizontal, Undo2 } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, Sparkles, Undo2, X } from 'lucide-react';
+import { askForDeck } from '../lib/assistant.js';
 import { hasTmdb, pref } from '../lib/config.js';
 import { enrich, ERAS, GENRE_CHOICES, topOfYear, trailerUrl, yearsFor } from '../lib/tmdb.js';
 import Rank from './Rank.jsx';
@@ -45,6 +46,27 @@ function QuickSwipe({ entries, me, onRate }) {
   const [stars, setStars] = useState(0);
   const [showSetup, setShowSetup] = useState(false);
   const request = useRef(0);
+  // A custom list asked for in words ("5 good R comedies"). While one is open it replaces the year-by-year deck.
+  const [deck, setDeck] = useState(null); // { request, note, movies }
+  const [ask, setAsk] = useState('');
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState('');
+  const askDeck = async (e) => {
+    e.preventDefault();
+    const wanted = ask.trim();
+    if (!wanted || asking) return;
+    setAsking(true);
+    setAskError('');
+    try {
+      const got = await askForDeck({ request: wanted, entries, memberId: me });
+      if (!got.movies.length) setAskError(got.asked ? "You've already rated everything on that list. Try a different one." : 'Nothing came back for that. Try wording it differently.');
+      else { setDeck({ request: wanted, ...got }); setAsk(''); setStars(0); }
+    } catch (err) {
+      setAskError(err.message);
+    } finally {
+      setAsking(false);
+    }
+  };
 
   useEffect(() => { pref.set('rate-per-year', perYear); }, [perYear]);
   useEffect(() => { pref.set('rate-genres', genres); }, [genres]);
@@ -68,8 +90,8 @@ function QuickSwipe({ entries, me, onRate }) {
   };
   useEffect(load, [year, perYear, genreKey, inRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const todo = (movies || []).filter((m) => !handled.has(String(m.id)) && (!entries[m.id]?.ratings?.[me] || entries[m.id].ratings[me].status === 'notseen')); // "haven't seen" still gets the want-to question
-  const next = finished ? null : todo[0];
+  const todo = ((deck ? deck.movies : movies) || []).filter((m) => !handled.has(String(m.id)) && (!entries[m.id]?.ratings?.[me] || entries[m.id].ratings[me].status === 'notseen')); // "haven't seen" still gets the want-to question
+  const next = deck ? todo[0] : finished ? null : todo[0];
 
   // Fetch the review score, rating and director for the card in front of you (and the one after).
   const [details, setDetails] = useState({});
@@ -82,11 +104,11 @@ function QuickSwipe({ entries, me, onRate }) {
 
   // This year is done (or had nothing): step to the next year in the list.
   useEffect(() => {
-    if (movies && !todo.length && !finished && inRange && !error) {
+    if (!deck && movies && !todo.length && !finished && inRange && !error) {
       const next = years[years.indexOf(year) + 1];
       setYear(next === undefined ? null : next);
     }
-  }, [movies, todo.length, finished, inRange, error]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [movies, todo.length, finished, inRange, error, deck]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advance = (rated) => {
     setHandled((s) => new Set(s).add(String(movie.id)));
@@ -110,7 +132,7 @@ function QuickSwipe({ entries, me, onRate }) {
   const toggleGenre = toggle(genres, setGenres);
   const toggleEra = toggle(eras, setEras);
   const ratedCount = history.filter((h) => h.rated).length;
-  const position = movie ? movies.findIndex((m) => m.id === movie.id) + 1 : 0;
+  const position = movie ? (movies || []).findIndex((m) => m.id === movie.id) + 1 : 0;
 
   const eraLabels = ERAS.filter((e) => eras.includes(e.id)).map((e) => e.label);
   const summary = [genres.length ? (genres.length <= 2 ? genres.join(' + ') : `${genres.length} categories`) : 'All categories', eraLabels.length ? (eraLabels.length <= 2 ? eraLabels.join(' + ') : `${eraLabels.length} eras`) : 'all years'].join(' · ');
@@ -129,6 +151,31 @@ function QuickSwipe({ entries, me, onRate }) {
         </div>
       </div>
 
+      <form onSubmit={askDeck} className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Sparkles size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gold" />
+          <input id="deck-ask" value={ask} onChange={(e) => setAsk(e.target.value)} maxLength={200} autoComplete="off" placeholder="Ask for a list, e.g. 5 good R comedies" aria-label="Ask for a list of movies to rate" className="w-full rounded-full border border-aisle bg-house py-2.5 pl-10 pr-4 text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
+        </div>
+        <button type="submit" disabled={!ask.trim() || asking} className="shrink-0 rounded-full bg-velvet px-4 py-2 text-sm font-bold text-cream disabled:bg-aisle disabled:text-dim">{asking ? 'Finding…' : 'Get list'}</button>
+      </form>
+      {askError && <Notice>{askError}</Notice>}
+      {deck && (
+        <div className="flex items-start gap-3 rounded-xl border border-gold/50 bg-seat p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-cream">“{deck.request}” <span className="font-normal text-dim">· {todo.length} of {deck.movies.length} left</span></p>
+            {deck.note && <p className="mt-0.5 text-xs text-dim">{deck.note}</p>}
+            <p className="mt-0.5 text-xs text-dim">The list comes from the AI's own knowledge, not a live lookup, so a “top 10” may differ from the site's current one.</p>
+          </div>
+          <button type="button" onClick={() => { setDeck(null); setStars(0); }} aria-label="Close this list and go back to all movies" className="shrink-0 rounded-full p-1.5 text-dim hover:text-cream"><X size={16} /></button>
+        </div>
+      )}
+      {deck && !todo.length && (
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <h2 className="text-xl font-bold text-cream">That's the whole list</h2>
+          <button type="button" onClick={() => setDeck(null)} className="rounded-lg bg-velvet px-4 py-2 font-bold text-cream">Back to all movies</button>
+        </div>
+      )}
+
       {showSetup && (
         <div className="flex flex-col gap-3 rounded-xl bg-seat p-3">
           <Group title="Categories" hint="Pick the ones you've watched a lot of. Any of them counts.">
@@ -146,16 +193,16 @@ function QuickSwipe({ entries, me, onRate }) {
         </div>
       )}
 
-      {error && <Notice>{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
+      {!deck && error && <Notice>{error} <button type="button" className="underline" onClick={load}>Try again</button></Notice>}
 
-      {finished && (
+      {!deck && finished && (
         <div className="flex flex-col items-center gap-3 py-12 text-center">
           <h2 className="text-xl font-bold text-cream">That's everything in this slice</h2>
           <p className="text-sm text-dim">{hasTmdb ? 'Add categories or eras, or raise the number per year, to see more.' : 'That is the whole built-in list for these choices.'}</p>
           <button type="button" onClick={() => setYear(years[0])} className="rounded-lg bg-velvet px-4 py-2 font-bold text-cream">Go through it again</button>
         </div>
       )}
-      {!finished && !movie && !error && <p className="py-16 text-center text-sm text-dim">Loading {year}…</p>}
+      {!deck && !finished && !movie && !error && <p className="py-16 text-center text-sm text-dim">Loading {year}…</p>}
 
       {movie && (
         <div key={movie.id} className="card-in flex flex-col items-center gap-4 lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-center lg:gap-10">
@@ -167,7 +214,7 @@ function QuickSwipe({ entries, me, onRate }) {
             <div className="flex items-center gap-2 text-sm text-dim">
               <span className="tabular-nums">{movie.year}</span>
               <CertBadge cert={movie.cert} />
-              <span className="tabular-nums">#{position} of {movies.length}</span>
+              {!deck && <span className="tabular-nums">#{position} of {movies.length}</span>}
             </div>
             <div className="text-xs text-dim">{[movie.genres?.slice(0, 3).join(' · '), directedBy(movie)].filter(Boolean).join(' · ')}</div>
             <MovieLinks movie={movie} trailer={trailerUrl(movie)} className="mt-1.5 justify-center" />

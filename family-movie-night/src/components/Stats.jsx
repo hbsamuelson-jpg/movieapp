@@ -126,6 +126,7 @@ export default function Stats({ entries, members, history, me, onBack, onOpen })
       )}
 
       <Card title="Each person">
+        <p className="-mt-1 text-xs text-dim">Favourite genres use everything the app knows: star ratings, Rank 5 results and all-time favourites.</p>
         <ul className="flex flex-col gap-3">
           {s.people.map((p) => (
             <li key={p.member.id} className="flex items-center gap-3">
@@ -136,7 +137,11 @@ export default function Stats({ entries, members, history, me, onBack, onOpen })
                   {s.toughest?.member.id === p.member.id && <span className="rounded-full bg-aisle px-2 py-0.5 text-[11px] text-cream">Toughest critic</span>}
                   {s.easiest?.member.id === p.member.id && <span className="rounded-full bg-aisle px-2 py-0.5 text-[11px] text-cream">Easiest to please</span>}
                 </span>
-                <span className="block text-sm text-dim">{p.rated ? <>{p.rated} rated · average <span className="tabular-nums text-cream">{stars(p.average)}</span>{p.topGenre ? ` · loves ${p.topGenre}` : ''}</> : 'No star ratings yet'}</span>
+                <span className="block text-sm text-dim">
+                  {[p.rated ? <span key="r">{p.rated} rated · average <span className="tabular-nums text-cream">{stars(p.average)}</span></span> : null, p.ranked ? <span key="k">{p.ranked} ranked</span> : null].filter(Boolean).reduce((all, x) => (all.length ? [...all, ' · ', x] : [x]), [])}
+                  {!p.rated && !p.ranked && 'Nothing rated or ranked yet'}
+                </span>
+                {p.genres.length > 0 && <span className="mt-0.5 block text-sm text-dim">Favourite {p.genres.length === 1 ? 'genre' : 'genres'}: <span className="font-bold text-cream">{p.genres.join(', ')}</span></span>}
               </span>
             </li>
           ))}

@@ -75,3 +75,28 @@ export async function resolvePicks(picks, entries, presentIds) {
   const seen = new Set();
   return found.filter((x) => x && !seen.has(x.movie.id) && seen.add(x.movie.id));
 }
+
+/**
+ * Ask for a list of movies to rate ("5 good R comedies", "top 10 action on Rotten Tomatoes").
+ * Returns { note, movies }: the AI names titles, each is looked up on TMDB (made-up ones drop
+ * out), and anything this person has already rated is left off.
+ */
+export async function askForDeck({ request, entries, memberId }) {
+  if (!hasFirebase) throw new Error('Custom lists only work on the live site, where the assistant can check who is asking.');
+  const mine = Object.values(entries).filter((e) => e.ratings?.[memberId] && e.ratings[memberId].status !== 'notseen');
+  let res;
+  try {
+    res = await fetch('/api/assistant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await idToken()}` },
+      body: JSON.stringify({ kind: 'deck', request, memberId, alreadyRated: mine.slice(0, 400).map((e) => label(e.movie)) }),
+    });
+  } catch {
+    throw new Error('Could not reach the assistant. Check your connection and try again.');
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data) throw new Error(data?.message || 'The assistant is not available right now.');
+  const found = await resolvePicks(data.picks || [], {}, []);
+  const rated = new Set(mine.map((e) => String(e.movie.id)));
+  return { note: data.reply || '', asked: (data.picks || []).length, movies: found.map((x) => x.movie).filter((m) => !rated.has(String(m.id))) };
+}

@@ -261,4 +261,27 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   assert.equal(withNote.alreadySeen, 0);
   assert.equal(forYou({ 501: { movie: M, ratings: { me: { status: 'notseen', stars: null } } } }, 'me', [{ movie: M, sim: 0.9, because: 'x' }], []).length, 1);
 }
+
+// Favourite genres on the stats page come from rankings too, not only star ratings.
+{
+  const ranked = (like) => ({ status: 'seen', stars: null, like, via: 'rank' });
+  const people = [{ id: 'r', name: 'Ranker' }];
+  const es = {
+    401: { movie: movie(401, 'C1', ['Comedy']), ratings: { r: ranked(5) } },
+    402: { movie: movie(402, 'C2', ['Comedy']), ratings: { r: ranked(4.5) } },
+    403: { movie: movie(403, 'H1', ['Horror']), ratings: { r: ranked(1.5) } },
+    404: { movie: movie(404, 'H2', ['Horror']), ratings: { r: ranked(2) } },
+  };
+  const person = familyStats(es, people, []).people[0];
+  assert.equal(person.rated, 0);
+  assert.equal(person.ranked, 4);
+  assert.deepEqual(person.genres, ['Comedy']);
+}
+// The assistant's answer parser allows a longer list when a deck is asked for.
+{
+  const { parseAnswer } = await import('../api/assistant.js');
+  const text = JSON.stringify({ reply: 'ok', picks: Array.from({ length: 30 }, (_, n) => ({ title: `T${n}`, year: 2000 })) });
+  assert.equal(parseAnswer(text).picks.length, 8);
+  assert.equal(parseAnswer(text, 20).picks.length, 20);
+}
 console.log('\nAll suggestion checks passed.');

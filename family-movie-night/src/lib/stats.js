@@ -13,8 +13,15 @@ export function familyStats(entries, members, history = []) {
   // Each person: how many they've rated, their average, and the genre they rate highest.
   const people = members.map((m) => {
     const given = list.map((e) => starsOf(e, m.id)).filter(Boolean);
-    const top = tasteProfile(entries, m.id).genres.filter((g) => g.n >= 3)[0];
-    return { member: m, rated: given.length, average: given.length ? mean(given) : null, topGenre: top?.name || null };
+    // Favourite genres come from the taste profile, which counts star ratings, Rank 5 results and
+    // all-time favourites alike, so someone who has only ranked movies still gets an answer.
+    const mine = list.map((e) => e.ratings?.[m.id]).filter(Boolean);
+    const genres = tasteProfile(entries, m.id).genres.filter((g) => g.n >= 2 && g.avg >= 3.5).slice(0, 3).map((g) => g.name);
+    return {
+      member: m, rated: given.length, average: given.length ? mean(given) : null,
+      ranked: mine.filter((r) => r.via === 'rank').length, favourites: (m.favorites || []).length,
+      genres, topGenre: genres[0] || null,
+    };
   });
   const judged = people.filter((p) => p.rated >= MIN_SHARED).sort((a, b) => a.average - b.average);
 

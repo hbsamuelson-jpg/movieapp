@@ -196,6 +196,8 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
+**Title links.** On a movie's detail sheet and on the Quick Swipe card, the title opens Rotten Tomatoes in a new tab. It goes to their search results for that title (the movie is the top result), because nothing the app has access to gives a movie's exact Rotten Tomatoes address.
+
 **Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise its Metacritic score, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
 
 **Directors and writers.** Movie details include the director(s) and up to two writers. For each person the app tracks who is behind the movies they rated 4 or higher; anyone who shows up twice (or once on an all-time favourite) becomes a "keeps liking" name. A movie by one of them gets half a star added to that person's predicted rating, and their other well-known movies are pulled into Tonight's new-to-us list. Movies rated before this existed get their credits filled in quietly in the background.

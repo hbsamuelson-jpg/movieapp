@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown } from 'lucide-react';
+import { Bookmark, Eye, Meh, Repeat, Star, ThumbsDown, ExternalLink } from 'lucide-react';
 import { quality, shownStars } from '../lib/suggest.js';
 import { posterUrl } from '../lib/tmdb.js';
 
@@ -206,3 +206,14 @@ export const Chip = ({ on, onClick, children, ...rest }) => (
 );
 
 export const Notice = ({ children }) => <p className="rounded-lg border border-velvet bg-velvet/15 p-3 text-sm text-cream">{children}</p>;
+
+/**
+ * The movie's title as a link to Rotten Tomatoes. There is no reliable way to know a movie's
+ * exact Rotten Tomatoes address, so this opens their search for the title, which lists it first.
+ */
+export const rtUrl = (movie) => `https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title || '')}`;
+export const TitleLink = ({ movie }) => (
+  <a href={rtUrl(movie)} target="_blank" rel="noopener noreferrer" title="Open on Rotten Tomatoes" className="underline decoration-aisle decoration-2 underline-offset-4 hover:decoration-gold">
+    {movie.title}<ExternalLink size={13} className="ml-1.5 inline align-baseline text-dim" aria-hidden="true" />
+  </a>
+);

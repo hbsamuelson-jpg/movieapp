@@ -3,7 +3,7 @@ import { ChevronDown, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { hasTmdb, pref } from '../lib/config.js';
 import { enrich, ERAS, GENRE_CHOICES, topOfYear, yearsFor } from '../lib/tmdb.js';
 import Rank from './Rank.jsx';
-import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS } from './ui.jsx';
+import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink } from './ui.jsx';
 
 const PER_YEAR = [5, 10, 20];
 const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank 5']];
@@ -155,7 +155,7 @@ function QuickSwipe({ entries, me, onRate }) {
         <div key={movie.id} className="card-in flex flex-col items-center gap-4">
           <div className="w-44"><Poster movie={movie} size="w500" className="shadow-xl shadow-black/60" /></div>
           <div className="flex flex-col items-center gap-1 text-center">
-            <h2 className="text-xl font-bold leading-tight text-cream">{movie.title}</h2>
+            <h2 className="text-xl font-bold leading-tight text-cream"><TitleLink movie={movie} /></h2>
             <ScoreBadge movie={movie} size="lg" className="my-1" />
             <div className="flex items-center gap-2 text-sm text-dim">
               <span className="tabular-nums">{movie.year}</span>

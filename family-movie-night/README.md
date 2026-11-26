@@ -1,9 +1,9 @@
 # Family Movie Night
 
-A web app for a group of people who watch movies together. Everyone signs in with their own Google account, rates what they've watched, and the app learns each person's taste and suggests what to watch for whoever is there tonight.
+A web app for a group of people who watch movies together. There are no accounts or passwords: you type your name once and pick it from a list after that. Everyone rates what they've watched, and the app learns each person's taste and suggests what to watch for whoever is there tonight.
 
 - **React 18 + Vite + Tailwind CSS 4 + Lucide icons**
-- **Firebase Auth** (Google Sign-In) and **Cloud Firestore** (ratings shared live across the group)
+- **Cloud Firestore** so names, ratings and the shortlist are shared live between devices (with silent anonymous Firebase Auth behind it)
 - **TMDB** for posters, search, MPAA ratings, runtimes and synopses
 - Updates itself on every device when you deploy a new build
 
@@ -12,7 +12,7 @@ A web app for a group of people who watch movies together. Everyone signs in wit
 | | No keys | TMDB key only | TMDB + Firebase |
 | --- | --- | --- | --- |
 | Movies | 150 built in, title cards instead of posters | Every movie, real posters | Every movie, real posters |
-| People | One person, on one device | One person, on one device | Everyone signs in with Google and shares a group |
+| People | Any number of names, on one device | Any number of names, on one device | The same names on every device |
 | Ratings | Saved in that browser | Saved in that browser | Synced live to everyone |
 
 The app ships with no ratings. Everything starts empty.
@@ -36,7 +36,7 @@ cp .env.example .env.local
 2. Go to **Settings → API** (https://www.themoviedb.org/settings/api) and request an API key. Choose "Developer", personal use.
 3. Copy the **API Key** (the short one) into `VITE_TMDB_API_KEY`. The long "API Read Access Token" also works.
 
-With only this key set you get real posters and every movie, but still one person on one device.
+With only this key set you get real posters and every movie, but names and ratings still live on one device.
 
 ### 2. Firebase project
 
@@ -51,18 +51,19 @@ With only this key set you get real posters and every movie, but still one perso
 | `projectId` | `VITE_FIREBASE_PROJECT_ID` |
 | `appId` | `VITE_FIREBASE_APP_ID` |
 
-### 3. Turn on Google Sign-In
+### 3. Turn on anonymous sign-in
+
+Nobody signs in by hand. The app quietly gives each device an anonymous session so the database only talks to the app.
 
 1. In the Firebase console: **Build → Authentication → Get started**.
-2. **Sign-in method → Google → Enable**. Pick a support email. Save.
-3. `localhost` is authorized by default. When you deploy, add your site's domain under **Authentication → Settings → Authorized domains**.
+2. **Sign-in method → Anonymous → Enable → Save**.
 
 ### 4. Create the database and lock it down
 
 1. **Build → Firestore Database → Create database**. Choose **Production mode** and any region near you.
 2. Open the **Rules** tab, paste the contents of [`firestore.rules`](./firestore.rules), and click **Publish**.
 
-Those rules let signed-in people read and write only the group they belong to. A group can be opened only by someone who knows its invite code.
+Those rules let the app (and only the app) read and write the shared data. There are no personal accounts, so anyone who can open your site can pick any name and change ratings. Share the link only with people you trust.
 
 ### 5. Start it
 
@@ -70,7 +71,7 @@ Those rules let signed-in people read and write only the group they belong to. A
 npm run dev
 ```
 
-Restart the dev server after editing `.env.local`. You should see the Google sign-in screen. Sign in, start a group, and send the invite link to the people you watch with. Each of them signs in with their own Google account.
+Restart the dev server after editing `.env.local`. Open the site, type your name, and send the link to the people you watch with. Each of them types their name once; after that every device shows the same list of names to pick from.
 
 Your finished `.env.local` looks like this:
 
@@ -96,7 +97,6 @@ Only your account can publish, because publishing happens from your GitHub and h
 1. Put this folder in a GitHub repo under your account.
 2. At https://vercel.com/new, import the repo. Vercel detects Vite on its own.
 3. In the project's **Settings → Environment Variables**, add the same `VITE_*` values from `.env.local`, then redeploy.
-4. Add the Vercel domain to Firebase **Authentication → Settings → Authorized domains**.
 
 From then on, every push to `main` deploys, and every phone picks it up the next time the app is opened. `vercel.json` already sets the cache headers this relies on.
 
@@ -115,9 +115,11 @@ Run `npm run deploy` again whenever you change something. `firebase.json` is alr
 
 ## How it works
 
-### People and groups
+### People
 
-There are no parent or kid roles. Everyone is an equal member of a **group**. The first person signs in and starts a group, which gets a six-character invite code. Everyone else opens the invite link (or signs in and types the code) and joins. Tap the avatars in the top right for the member list, the invite link, and sign out.
+There are no accounts, roles or passwords. The first time someone opens the site they type their name. After that the site opens with a list of names to pick from, and each device remembers who used it last. Tap the avatars in the top right to switch person, add a name, or remove one.
+
+Everyone who opens the site shares one space: the same names, ratings and shortlist.
 
 ### Tabs
 
@@ -151,24 +153,19 @@ People who aren't watching tonight don't count, including their vetoes.
 
 `npm test` checks these rules.
 
-**"Top of each year"** means the most-rated releases of that year on TMDB, PG-13 and under unless you turn on R-rated movies in the group page.
+**"Top of each year"** means the most-rated releases of that year on TMDB, PG-13 and under unless you turn on R-rated movies on the people page (tap the avatars).
 
 ## Database schema (Firestore)
 
 ```
-users/{uid}                           ← one per Google account
-  groupId: "K7M2QX"                   // the group this person is in
-
-groups/{code}                         ← the document id is the invite code
-  name: "Couper's movie night"
+groups/family                         ← the one shared space for this site
   members: {
-    "<uid>": { name: "Couper", photo: "https://…" },
-    "<uid>": { name: "Henry",  photo: null }
+    "k3x9q2ab": { name: "Couper", joinedAt: timestamp },
+    "p7m1zz0c": { name: "Henry",  joinedAt: timestamp }
   }
   shortlist: [ { …movie }, { …movie } ]   // tonight's shortlist, shared
-  createdAt: timestamp
 
-groups/{code}/movies/{tmdbId}         ← one document per movie anyone has rated
+groups/family/movies/{tmdbId}         ← one document per movie anyone has rated
   movie: {
     id: 105,                          // TMDB id
     title: "Back to the Future",
@@ -182,8 +179,8 @@ groups/{code}/movies/{tmdbId}         ← one document per movie anyone has rate
     detailed: true                    // runtime + cert have been fetched
   }
   ratings: {
-    "<uid>": { status: "again",  stars: 5    },
-    "<uid>": { status: "unseen", stars: null }   // a missing uid = hasn't rated it
+    "k3x9q2ab": { status: "again",  stars: 5    },
+    "p7m1zz0c": { status: "unseen", stars: null }   // a missing id = hasn't rated it
     // status is one of: seen | again | unseen | meh | pass
   }
   updatedAt: timestamp
@@ -195,12 +192,12 @@ Keeping everyone's ratings on one movie document means suggestions come from a s
 
 ```
 src/
-  App.jsx                   sign-in, group onboarding, tabs
+  App.jsx                   pick-your-name front door, tabs
   index.css                 theme tokens and animations
   lib/
     config.js               reads .env, small on-device preferences
-    firebase.js             Google sign-in; create, join and leave a group
-    store.js                on-device store and shared group store, same interface
+    firebase.js             Firebase setup and the silent anonymous session
+    store.js                on-device store and shared store, same interface
     tmdb.js                 top-of-year decks, search, details; falls back to the built-in list
     suggest.js              taste profiles and suggestions (pure functions)
     autoUpdate.js           checks for a newer build and reloads into it
@@ -211,7 +208,7 @@ src/
     Browse.jsx              search
     Mine.jsx                your ratings and taste summary
     RateSheet.jsx           movie details and rating sheet
-    Group.jsx               members, invite link, settings
+    Group.jsx               names, switch person, settings
     ui.jsx                  posters, stars, status stubs, avatars, rows
 firestore.rules             security rules to paste into Firebase
 vercel.json / firebase.json hosting config for either deploy route
@@ -222,12 +219,11 @@ tests/suggest.test.mjs      rule checks
 
 ## Troubleshooting
 
-- **No sign-in screen after adding keys:** all four `VITE_FIREBASE_*` values must be set and `VITE_DEMO_MODE` must not be `true`. Locally, restart the dev server. On Vercel, add them under Settings → Environment Variables and redeploy; keys only take effect on a new build.
+- **Names don't show up on another device after adding keys:** all four `VITE_FIREBASE_*` values must be set and `VITE_DEMO_MODE` must not be `true`. Locally, restart the dev server. On Vercel, add them under Settings → Environment Variables and redeploy; keys only take effect on a new build.
 - **No posters:** `VITE_TMDB_API_KEY` is missing from the build. Same fix as above.
 - **"The database refused access":** the rules from step 4 have not been published.
-- **"This domain is not authorized":** add the domain in step 3.3.
 - **An update isn't showing up:** check the build time at the bottom of the page. If it is old, close and reopen the app once; if your host isn't Vercel or Firebase, make sure it doesn't cache `index.html` or `version.json`.
-- **Sign-in popup closes on a phone:** some in-app browsers block popups. Open the site in Safari or Chrome.
+- **"Anonymous sign-in is switched off":** do step 3.
 - **No MPAA rating or runtime on a movie in Rate or Search:** TMDB list results do not include them. They load when you open or rate the movie.
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.

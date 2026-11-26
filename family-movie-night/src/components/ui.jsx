@@ -7,18 +7,11 @@ import { posterUrl } from '../lib/tmdb.js';
 const AVATAR_COLORS = ['#B91C1C', '#D97706', '#0E7490', '#6D28D9', '#15803D', '#BE185D', '#1D4ED8', '#0F766E'];
 const hash = (text) => [...String(text)].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
-/** A person's Google photo, or their initial on a colour of their own. */
+/** A person's initial on a colour of their own. */
 export function Avatar({ member, size = 32, ring = false, dim = false }) {
-  const [failed, setFailed] = useState(false);
-  const cls = `inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ${ring ? 'ring-2 ring-gold ring-offset-2 ring-offset-house' : ''} ${dim ? 'opacity-40' : ''}`;
+  const cls = `inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ${ring ? 'ring-2 ring-gold ring-offset-2 ring-offset-house' : ''} ${dim ? 'opacity-40' : ''}`;
   const style = { width: size, height: size, fontSize: Math.round(size * 0.45), background: AVATAR_COLORS[hash(member.id) % AVATAR_COLORS.length] };
-  return (
-    <span className={cls} style={style} title={member.name}>
-      {member.photo && !failed
-        ? <img src={member.photo} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-full w-full object-cover" />
-        : (member.name || '?').slice(0, 1).toUpperCase()}
-    </span>
-  );
+  return <span className={cls} style={style} title={member.name}>{(member.name || '?').slice(0, 1).toUpperCase()}</span>;
 }
 
 /* ---------- Posters ---------- */

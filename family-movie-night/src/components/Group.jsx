@@ -1,59 +1,44 @@
 import { useState } from 'react';
-import { Copy, LogOut } from 'lucide-react';
+import { ArrowLeftRight, X } from 'lucide-react';
 import { hasFirebase } from '../lib/config.js';
 import { applyUpdate, buildLabel } from '../lib/autoUpdate.js';
-import { Avatar, Notice } from './ui.jsx';
+import { Avatar } from './ui.jsx';
 
-/** Your group: who is in it, how to invite people, and a few settings. */
-export default function Group({ group, members, me, signedIn, includeR, onIncludeR, onLeave, onSignOut, onSignIn, onClearLocal }) {
-  const [copied, setCopied] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const link = group ? `${window.location.origin}/?join=${group.id}` : '';
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* the link is shown, so it can be copied by hand */ }
-  };
+/** Who's in, switching person, and a couple of settings. */
+export default function Group({ members, me, includeR, onIncludeR, onSwitch, onAdd, onRemove }) {
+  const [name, setName] = useState('');
+  const [removing, setRemoving] = useState(null);
+  const add = (e) => { e.preventDefault(); if (name.trim()) { onAdd(name); setName(''); } };
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-5">
-      {group ? (
-        <>
-          <section className="flex flex-col gap-3">
-            <h2 className="text-2xl font-bold text-cream">{group.name}</h2>
-            <ul className="flex flex-col gap-2 rounded-xl bg-seat p-3">
-              {members.map((m) => (
-                <li key={m.id} className="flex items-center gap-3">
-                  <Avatar member={m} size={36} />
-                  <span className="font-bold text-cream">{m.name}</span>
-                  {m.id === me && <span className="text-xs text-dim">you</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="flex flex-col gap-2 rounded-xl bg-seat p-4">
-            <h3 className="font-bold text-cream">Invite someone</h3>
-            <p className="text-sm text-dim">Send them this link, or have them sign in and enter the code. Everyone in the group is equal: each person rates for themselves and sees the same suggestions.</p>
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-house px-3 py-2">
-              <span className="font-display text-2xl tracking-[0.2em] text-gold">{group.id}</span>
-              <button type="button" onClick={copy} className="inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream"><Copy size={14} /> {copied ? 'Copied' : 'Copy link'}</button>
-            </div>
-            <span className="break-all text-xs text-dim">{link}</span>
-          </section>
-        </>
-      ) : (
-        <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
-          <h2 className="text-xl font-bold text-cream">Just you, on this device</h2>
-          {hasFirebase ? (
-            <>
-              <p className="text-sm text-dim">Sign in to share ratings with other people and get suggestions for whoever is watching.</p>
-              <button type="button" onClick={onSignIn} className="rounded-lg bg-cream px-4 py-2.5 font-bold text-house">Sign in with Google</button>
-            </>
-          ) : (
-            <Notice>Google sign-in isn't switched on for this site yet. Until the Firebase keys are added (README, steps 2–4), ratings stay on this device and can't be shared.</Notice>
-          )}
-          <button type="button" onClick={onClearLocal} className="self-start text-sm text-dim underline">Erase the ratings on this device</button>
-        </section>
-      )}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-2xl font-bold text-cream">Who's in</h2>
+          <button type="button" onClick={onSwitch} className="inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream"><ArrowLeftRight size={14} /> Switch person</button>
+        </div>
+        <ul className="flex flex-col gap-1 rounded-xl bg-seat p-2">
+          {members.map((m) => (
+            <li key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+              <Avatar member={m} size={36} />
+              <span className="min-w-0 flex-1 truncate font-bold text-cream">{m.name}</span>
+              {m.id === me ? <span className="text-xs text-gold">that's you</span>
+                : removing === m.id
+                  ? <span className="flex items-center gap-2 text-xs text-dim">Remove? <button type="button" onClick={() => { onRemove(m.id); setRemoving(null); }} className="font-bold text-cream underline">Yes</button><button type="button" onClick={() => setRemoving(null)} className="underline">No</button></span>
+                  : <button type="button" onClick={() => setRemoving(m.id)} aria-label={`Remove ${m.name}`} className="rounded-full p-2 text-dim hover:text-cream"><X size={16} /></button>}
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={add} className="flex gap-2">
+          <input id="add-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="Add another name" aria-label="Add another name" autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-aisle bg-seat px-3 py-2.5 text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
+          <button type="submit" disabled={!name.trim()} className="rounded-lg bg-velvet px-4 py-2.5 font-bold text-cream disabled:bg-aisle disabled:text-dim">Add</button>
+        </form>
+        <p className="text-xs text-dim">
+          {hasFirebase
+            ? 'Everyone who opens this site sees the same names and ratings. There are no passwords, so anyone with the link can pick any name.'
+            : 'Names and ratings are saved on this device only. To share them between phones, the site needs its Firebase keys (README, step 2).'}
+        </p>
+      </section>
 
       <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
         <label className="flex items-center justify-between gap-3 text-sm font-bold text-cream">
@@ -62,15 +47,6 @@ export default function Group({ group, members, me, signedIn, includeR, onInclud
         </label>
         <p className="text-xs text-dim">Off by default. This is a setting for this device only.</p>
       </section>
-
-      {signedIn && (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <button type="button" onClick={onSignOut} className="inline-flex items-center gap-1.5 rounded-lg border border-aisle px-3 py-2 font-bold text-cream"><LogOut size={15} /> Sign out</button>
-          {group && (confirming
-            ? <span className="flex items-center gap-2 text-dim">Leave {group.name}? <button type="button" onClick={onLeave} className="font-bold text-cream underline">Yes, leave</button> <button type="button" onClick={() => setConfirming(false)} className="underline">Cancel</button></span>
-            : <button type="button" onClick={() => setConfirming(true)} className="text-dim underline">Leave this group</button>)}
-        </div>
-      )}
 
       <p className="text-xs tabular-nums text-dim">Version {buildLabel} · <button type="button" onClick={applyUpdate} className="underline">Check for update</button></p>
     </div>

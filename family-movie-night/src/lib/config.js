@@ -7,7 +7,7 @@ export const firebaseConfig = {
   appId: env.VITE_FIREBASE_APP_ID,
 };
 
-/** True when all Firebase keys are present. Without them the app runs for one person on one device. */
+/** True when all Firebase keys are present. Without them, names and ratings stay on one device. */
 export const hasFirebase =
   env.VITE_DEMO_MODE !== 'true' && Object.values(firebaseConfig).every(Boolean);
 
@@ -16,7 +16,6 @@ export const tmdbKey = env.VITE_TMDB_API_KEY || '';
 export const hasTmdb = Boolean(tmdbKey);
 
 export const CERTS = ['G', 'PG', 'PG-13', 'R'];
-export const LOCAL_MEMBER = { id: 'me', name: 'Me', photo: null };
 
 export const pref = {
   get(key, fallback) {

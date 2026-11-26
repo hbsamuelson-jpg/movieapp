@@ -113,17 +113,17 @@ Run `npm run deploy` again whenever you change something. `firebase.json` is alr
 
 **On the phones:** open the site and use **Share → Add to Home Screen** (iPhone) or **Install app** (Android). It then opens full-screen like an app and still updates itself.
 
-## Rotten Tomatoes scores (optional)
+## Critic scores (optional)
 
-Rotten Tomatoes has no public API. The app gets the Tomatometer through OMDb, which needs its own free key:
+The app gets critic scores through OMDb, which needs its own free key:
 
 1. Go to https://www.omdbapi.com/apikey.aspx, choose the free key, enter an email, and click the activation link they send.
 2. In Vercel → Settings → Environment Variables, add `VITE_OMDB_API_KEY` with that key. Like the TMDB key, this one is read by the browser, so choose **Config** if Vercel asks.
 3. Redeploy.
 
-With the key, every movie shows **RT 93%**. Without it, or for a movie Rotten Tomatoes has no score for, the app shows the TMDB audience score instead, labelled **TMDB 78%**.
+**What you actually get.** Rotten Tomatoes has no public API, and OMDb, which used to relay the Tomatometer, currently returns a **Metacritic** score for most movies and no Rotten Tomatoes score (checked November 2026 against several well-known titles). So in practice the badge reads **Metacritic 82**. The app still asks for both and will show **Rotten Tomatoes 97%** for any movie OMDb does supply one for. With no key, or no critic score at all, it shows the TMDB audience score, labelled **TMDB 78%**.
 
-The free OMDb key allows a limited number of lookups per day (1,000 at the time of writing). The app keeps that low: each score is cached on the device, and saved with the movie once anyone rates it. If the limit is hit, scores for new movies fall back to TMDB until the next day.
+The free OMDb key allows a limited number of lookups per day (1,000 at the time of writing). The app keeps that low: each answer is cached on the device, and saved with the movie once anyone rates it. If the limit is hit, new movies fall back to TMDB scores until the next day.
 
 ## The AI assistant (optional)
 
@@ -190,7 +190,7 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 
 **Favourites.** An all-time favourite is stored on the person and recorded as watched-and-loved (no stars). It counts double in their taste profile, and the Tonight list looks for movies like it. Adding one never overwrites a rating you gave yourself.
 
-**Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has it, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
+**Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise its Metacritic score, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.
 
 **Directors and writers.** Movie details include the director(s) and up to two writers. For each person the app tracks who is behind the movies they rated 4 or higher; anyone who shows up twice (or once on an all-time favourite) becomes a "keeps liking" name. A movie by one of them gets half a star added to that person's predicted rating, and their other well-known movies are pulled into Tonight's new-to-us list. Movies rated before this existed get their credits filled in quietly in the background.
 
@@ -239,8 +239,9 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
     vote: 8.3,                        // TMDB audience score, 0–10
     overview: "…",
     crew: [ { id: 1, name: "Robert Zemeckis", role: "director" }, … ],  // director(s) + up to 2 writers
-    imdb: "tt0088763", rt: 93,        // IMDb id and Rotten Tomatoes score (null if none)
-    scored: true,                     // the Rotten Tomatoes lookup has been done
+    imdb: "tt0088763",
+    rt: null, mc: 88,                 // Rotten Tomatoes and Metacritic scores, 0–100 or null
+    scored: 2,                        // critic-score lookup done (version number)
     detailed: true                    // runtime + cert have been fetched
   }
   ratings: {

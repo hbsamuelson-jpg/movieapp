@@ -125,20 +125,24 @@ export const directedBy = (movie) => {
 };
 
 /**
- * The review score as a badge: Rotten Tomatoes when the app has it, otherwise the TMDB audience
- * score, labelled as such. Red means a Rotten Tomatoes score of 60 or more; grey means lower.
+ * The review score as a badge. Shows the best source the app has for the movie:
+ *   Rotten Tomatoes (red at 60%+), else Metacritic (gold at 61+), else the TMDB audience score.
  * size: 'sm' for list rows, 'lg' for the card or sheet you're rating from.
  */
 export function ScoreBadge({ movie, size = 'sm', className = '' }) {
   const score = quality(movie);
   if (score == null) return null;
-  const isRt = typeof movie.rt === 'number';
-  const tone = !isRt ? 'border border-aisle text-dim' : score >= 60 ? 'bg-velvet text-white' : 'bg-aisle text-cream';
+  const source = typeof movie.rt === 'number' ? 'rt' : typeof movie.mc === 'number' ? 'mc' : 'tmdb';
+  const look = {
+    rt: { long: 'Rotten Tomatoes', short: 'RT', unit: '%', tone: score >= 60 ? 'bg-velvet text-white' : 'bg-aisle text-cream', title: 'Rotten Tomatoes critics score' },
+    mc: { long: 'Metacritic', short: 'MC', unit: '', tone: score >= 61 ? 'bg-gold text-house' : 'bg-aisle text-cream', title: 'Metacritic critics score, out of 100' },
+    tmdb: { long: 'TMDB', short: 'TMDB', unit: '%', tone: 'border border-aisle text-dim', title: 'TMDB audience score (no critics score available)' },
+  }[source];
   const shape = size === 'lg' ? 'gap-2 rounded-lg px-3 py-1.5' : 'gap-1 rounded px-1.5 py-0.5';
   return (
-    <span className={`inline-flex shrink-0 items-baseline whitespace-nowrap ${shape} ${tone} ${className}`} title={isRt ? 'Rotten Tomatoes critics score' : 'TMDB audience score (no Rotten Tomatoes score available)'}>
-      <span className={`font-bold uppercase tracking-wide opacity-80 ${size === 'lg' ? 'text-xs' : 'text-[9px]'}`}>{isRt ? (size === 'lg' ? 'Rotten Tomatoes' : 'RT') : 'TMDB'}</span>
-      <span className={`font-bold tabular-nums leading-none ${size === 'lg' ? 'text-2xl' : 'text-sm'}`}>{score}%</span>
+    <span className={`inline-flex shrink-0 items-baseline whitespace-nowrap ${shape} ${look.tone} ${className}`} title={look.title}>
+      <span className={`font-bold uppercase tracking-wide opacity-80 ${size === 'lg' ? 'text-xs' : 'text-[9px]'}`}>{size === 'lg' ? look.long : look.short}</span>
+      <span className={`font-bold tabular-nums leading-none ${size === 'lg' ? 'text-2xl' : 'text-sm'}`}>{score}{look.unit}</span>
     </span>
   );
 }

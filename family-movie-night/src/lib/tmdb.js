@@ -196,7 +196,7 @@ export async function searchMovies(query) {
 
 /** Fill in runtime, MPAA rating and full genres. Returns the movie unchanged in demo mode or on failure. */
 /** True when a movie is missing details the app can still fetch (rating, runtime, crew, critic score). */
-export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!hasOmdb || movie.scored));
+export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!hasOmdb || movie.scored === SCORE_VERSION));
 
 export async function enrich(movie) {
   if (!needsDetails(movie)) return movie;
@@ -204,52 +204,56 @@ export async function enrich(movie) {
     const raw = await get(`/movie/${movie.id}`, { append_to_response: 'release_dates,credits', language: 'en-US' });
     const us = raw.release_dates?.results?.find((r) => r.iso_3166_1 === 'US');
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
-    const rt = await rottenTomatoes(raw.imdb_id);
+    const critics = await criticScores(raw.imdb_id);
     return {
       ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []),
-      imdb: raw.imdb_id || null, rt: rt.score, scored: rt.checked, detailed: true,
+      imdb: raw.imdb_id || null, rt: critics.rt, mc: critics.mc, scored: critics.checked ? SCORE_VERSION : false, detailed: true,
     };
   } catch {
     return movie;
   }
 }
 
-/* ---------- Rotten Tomatoes, via OMDb ---------- */
-// Rotten Tomatoes has no public API. OMDb (omdbapi.com) relays the Tomatometer for a movie's
-// IMDb id. Its free key allows a limited number of lookups a day, so every answer is cached
-// on the device, and saved with the movie once someone rates it.
+/* ---------- Critic scores, via OMDb ---------- */
+// OMDb (omdbapi.com) relays critic scores for a movie's IMDb id. In practice it returns the
+// Metacritic score for most movies and a Rotten Tomatoes score only for some, so the app keeps
+// both and shows Rotten Tomatoes when it exists. Its free key allows a limited number of
+// lookups a day, so every answer is cached on the device and saved with the movie once rated.
 
-const RT_CACHE = 'rt-cache';
-let rtCache = null;
-const rtStore = () => (rtCache ||= pref.get(RT_CACHE, {}));
-const rtRemember = (imdbId, score) => {
-  const cache = rtStore();
-  cache[imdbId] = score;
+const SCORE_VERSION = 2; // bump to make every device look scores up again
+const SCORE_CACHE = 'score-cache-v2';
+let scoreCache = null;
+const scoreStore = () => (scoreCache ||= pref.get(SCORE_CACHE, {}));
+const remember = (imdbId, scores) => {
+  const cache = scoreStore();
+  cache[imdbId] = scores;
   const keys = Object.keys(cache);
   if (keys.length > 3000) keys.slice(0, 500).forEach((k) => delete cache[k]); // keep it bounded
-  pref.set(RT_CACHE, cache);
+  pref.set(SCORE_CACHE, cache);
 };
+const percent = (value) => { const n = parseInt(value, 10); return Number.isFinite(n) ? n : null; };
 
-/** Returns { score: 0–100 | null, checked }. `checked` is false when the lookup could not be made at all. */
-async function rottenTomatoes(imdbId) {
-  if (!hasOmdb || !imdbId) return { score: null, checked: false };
-  const cache = rtStore();
-  if (imdbId in cache) return { score: cache[imdbId], checked: true };
+/** Returns { rt, mc, checked }: each score is 0–100 or null. `checked` is false when the lookup could not be made at all. */
+async function criticScores(imdbId) {
+  const none = { rt: null, mc: null };
+  if (!hasOmdb || !imdbId) return { ...none, checked: false };
+  const cache = scoreStore();
+  if (cache[imdbId]) return { ...cache[imdbId], checked: true };
   try {
     const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${omdbKey}`);
     const data = await res.json();
     if (data.Response === 'False') {
       // "Movie not found" is a real answer; a bad key or a used-up daily limit is not.
       const settled = /not found|incorrect imdb/i.test(data.Error || '');
-      if (settled) rtRemember(imdbId, null);
-      return { score: null, checked: settled };
+      if (settled) remember(imdbId, none);
+      return { ...none, checked: settled };
     }
-    const value = (data.Ratings || []).find((r) => r.Source === 'Rotten Tomatoes')?.Value;
-    const score = value ? parseInt(value, 10) : null;
-    rtRemember(imdbId, Number.isFinite(score) ? score : null);
-    return { score: Number.isFinite(score) ? score : null, checked: true };
+    const from = (source) => (data.Ratings || []).find((r) => r.Source === source)?.Value;
+    const scores = { rt: percent(from('Rotten Tomatoes')), mc: percent(from('Metacritic')) ?? percent(data.Metascore) };
+    remember(imdbId, scores);
+    return { ...scores, checked: true };
   } catch {
-    return { score: null, checked: false };
+    return { ...none, checked: false };
   }
 }
 

@@ -284,4 +284,22 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   assert.equal(parseAnswer(text).picks.length, 8);
   assert.equal(parseAnswer(text, 20).picks.length, 20);
 }
+
+// Genres rated directly steer predictions, even with no movies rated, and fade as real ratings arrive.
+{
+  const { setStatedGenres: setStated, tasteProfile: profileOf, predictStars: predict } = await import('../src/lib/suggest.js');
+  const horror = movie(301, 'Scary', ['Horror']), comedy = movie(302, 'Funny', ['Comedy']);
+  const before = predict(profileOf({}, 'g'), horror);
+  setStated({ g: { Horror: 1, Comedy: 5 } });
+  const p = profileOf({}, 'g');
+  assert.ok(predict(p, horror) < before - 0.5);
+  assert.ok(predict(p, comedy) > before + 0.2);
+  assert.equal(p.genres[0].name, 'Comedy');
+  assert.equal(p.genres[0].stated, 5);
+  assert.deepEqual(familyStats({}, [{ id: 'g', name: 'G' }], []).people[0].genres, ['Comedy']);
+  // Ten horror movies they loved outweigh the stated 1 star.
+  const loved = Object.fromEntries(Array.from({ length: 10 }, (_, n) => [310 + n, { movie: movie(310 + n, `H${n}`, ['Horror']), ratings: { g: seen(5) } }]));
+  assert.ok(predict(profileOf(loved, 'g'), horror) > 3.5);
+  setStated({});
+}
 console.log('\nAll suggestion checks passed.');

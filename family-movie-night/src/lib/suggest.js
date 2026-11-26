@@ -38,6 +38,16 @@ const rated = (r) => liking(r) != null;
  *   people  [{ id, name, role, n, avg }] directors and writers behind movies they rated 4 or
  *           higher, at least twice (an all-time favourite counts double, so one is enough).
  */
+/**
+ * Genres people have rated directly on their Mine page: { memberId: { Comedy: 5, Horror: 1.5 } }.
+ * The app sets this whenever the group changes; taste profiles then count each stated genre
+ * rating like STATED_WEIGHT movies of that genre rated that way, so it steers suggestions from
+ * day one and still gives way as real ratings pile up.
+ */
+let statedGenres = {};
+export const setStatedGenres = (byMember) => { statedGenres = byMember || {}; };
+const STATED_WEIGHT = 4;
+
 export function tasteProfile(entries, memberId) {
   const byGenre = {};
   const byPerson = {};
@@ -63,10 +73,17 @@ export function tasteProfile(entries, memberId) {
       }
     }
   }
+  for (const [name, stars] of Object.entries(statedGenres[memberId] || {})) {
+    if (!(stars > 0)) continue;
+    byGenre[name] ||= { name, n: 0, sum: 0 };
+    byGenre[name].n += STATED_WEIGHT;
+    byGenre[name].sum += stars * STATED_WEIGHT;
+    byGenre[name].stated = stars;
+  }
   const mean = count ? sum / count : 3.5;
   const K = 3; // how many ratings a genre needs before we mostly trust its own average
   const genres = Object.values(byGenre)
-    .map((g) => ({ name: g.name, n: g.n, avg: g.sum / g.n, score: (g.sum + K * mean) / (g.n + K) }))
+    .map((g) => ({ name: g.name, n: g.n, avg: g.sum / g.n, score: (g.sum + K * mean) / (g.n + K), stated: g.stated || null }))
     .sort((a, b) => b.score - a.score);
   const people = Object.values(byPerson)
     .filter((p) => p.n >= 2)
@@ -81,11 +98,14 @@ export const likedCrew = (profile, movie) => (movie.crew || []).filter((c) => (p
 /** Guess how many stars (0.5–5) this person would give a movie they haven't rated. */
 export function predictStars(profile, movie) {
   const crowd = movie.vote ? movie.vote / 2 : 3.5;
-  if (!profile.count) return crowd;
+  const stated = profile.genres.filter((g) => g.stated);
+  if (!profile.count && !stated.length) return crowd;
   const scores = (movie.genres || []).map((g) => profile.genres.find((x) => x.name === g)?.score ?? profile.mean);
   const taste = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : profile.mean;
   // Lean on the crowd until there are enough ratings to trust the person's own taste.
-  const trust = Math.min(0.7, profile.count / 30);
+  // A genre they rated directly is trusted at least halfway from the start.
+  const saidSo = (movie.genres || []).some((g) => stated.some((x) => x.name === g));
+  const trust = Math.max(Math.min(0.7, (profile.count + stated.length * STATED_WEIGHT) / 30), saidSo ? 0.5 : 0);
   // A director or writer they keep liking is worth half a star.
   const bonus = likedCrew(profile, movie).length ? 0.5 : 0;
   return Math.max(0.5, Math.min(5, taste * trust + crowd * (1 - trust) + bonus));

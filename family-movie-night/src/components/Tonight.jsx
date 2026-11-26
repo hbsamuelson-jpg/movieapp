@@ -67,7 +67,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
   }, [interestKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const snoozedIds = useMemo(() => activeSnoozes(members, presentIds), [members, presentIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
-  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list, snoozed: snoozedIds })), [entries, presentIds.join(), vibes, similar, seeking, found, snoozedIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar, discoveries: found.list, snoozed: snoozedIds })), [entries, members, presentIds.join(), vibes, similar, seeking, found, snoozedIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const genres = useMemo(() => [...new Set(ranked.flatMap((e) => e.movie.genres || []))].sort(), [ranked]);
   const filtered = applyFilters(ranked, { ...filters, streamable: stream === 'stream', freeOnly: stream === 'free' });
   // Everyone's active snoozes among the people watching, for the "bring back" list.

@@ -14,6 +14,7 @@ import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js
 import { createLocalStore, createSharedStore, newId8, slim } from './lib/store.js';
 import { detailsChanged, enrich, needsDetails, triedRecently } from './lib/tmdb.js';
 import { unscoredNights } from './lib/stats.js';
+import { setStatedGenres } from './lib/suggest.js';
 
 const TABS = [
   { id: 'tonight', label: 'Tonight', icon: Popcorn },
@@ -103,6 +104,8 @@ export default function App() {
 
   const { entries, shortlist, vote, history } = data;
   const myself = members.find((m) => m.id === me);
+  // Genres people rated directly feed every taste profile; set before anything below renders.
+  setStatedGenres(Object.fromEntries(members.map((m) => [m.id, m.genreStars || {}])));
   if (!myself) {
     return (
       <Shell>
@@ -207,7 +210,7 @@ export default function App() {
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} me={me} onWant={(m, on) => rate(m, on ? { status: 'unseen', stars: null } : null)} onOpen={setOpen} />}
-          {tab === 'mine' && <Mine entries={entries} members={members} me={me} onWant={(m) => rate(m, { status: 'unseen', stars: null })} onPass={(m) => rate(m, { status: 'pass', stars: null })} favorites={favorites} onAddFavorite={addFavorite} onRemoveFavorite={removeFavorite} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'mine' && <Mine entries={entries} members={members} me={me} genreStars={myself?.genreStars || {}} onGenreStars={(genre, stars) => store.setGenreStars(me, genre, stars)} onWant={(m) => rate(m, { status: 'unseen', stars: null })} onPass={(m) => rate(m, { status: 'pass', stars: null })} favorites={favorites} onAddFavorite={addFavorite} onRemoveFavorite={removeFavorite} onOpen={setOpen} onRate={() => go('rate')} />}
         </>
       )}
 

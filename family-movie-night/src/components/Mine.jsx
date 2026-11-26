@@ -1,23 +1,26 @@
 import { useMemo, useState } from 'react';
-import { Heart, X } from 'lucide-react';
+import { ChevronDown, Heart, X } from 'lucide-react';
+import { GENRE_CHOICES } from '../lib/tmdb.js';
 import { liking, tasteProfile } from '../lib/suggest.js';
 import ForYou from './ForYou.jsx';
 import MoviePicker from './MoviePicker.jsx';
-import { Chip, MovieRow, Poster, StatusStub } from './ui.jsx';
+import { Chip, MovieRow, Poster, StarRating, StatusStub } from './ui.jsx';
 
 const TABS = [['all', 'All'], ['unseen', 'Want to'], ['seen', 'Watched'], ['again', 'Watch again'], ['meh', "Don't care"], ['pass', 'No thanks'], ['notseen', "Haven't seen"]];
 const TASTE_MIN = 8; // watched movies needed before the taste summary means anything
 const MAX_FAVORITES = 10;
 
 /** Your profile: all-time favourites, what the app has learned about your taste, and everything you've rated. */
-export default function Mine({ entries, members, me, onWant, onPass, favorites, onAddFavorite, onRemoveFavorite, onOpen, onRate }) {
+export default function Mine({ entries, members, me, genreStars = {}, onGenreStars, onWant, onPass, favorites, onAddFavorite, onRemoveFavorite, onOpen, onRate }) {
   const [tab, setTab] = useState('all');
   const mine = Object.values(entries)
     .filter((e) => e.ratings?.[me])
     .sort((a, b) => (liking(b.ratings[me]) || 0) - (liking(a.ratings[me]) || 0) || a.movie.title.localeCompare(b.movie.title));
   const count = (key) => (key === 'all' ? mine.length : mine.filter((e) => e.ratings[me].status === key).length);
   const shown = tab === 'all' ? mine : mine.filter((e) => e.ratings[me].status === tab);
-  const taste = useMemo(() => tasteProfile(entries, me), [entries, me]);
+  const taste = useMemo(() => tasteProfile(entries, me), [entries, me, members]);
+  const [showGenres, setShowGenres] = useState(false);
+  const ratedGenres = Object.keys(genreStars).length;
   const top = taste.genres.filter((g) => g.n >= 2).slice(0, 6);
   const people = taste.people.slice(0, 6);
 
@@ -72,6 +75,29 @@ export default function Mine({ entries, members, me, onWant, onPass, favorites, 
             <p className="text-sm text-cream">{people.map((p) => p.name).join(' · ')}</p>
             <p className="text-xs text-dim">Their other movies get a lift in your suggestions.</p>
           </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
+        <button type="button" onClick={() => setShowGenres((v) => !v)} aria-expanded={showGenres} className="flex items-center justify-between gap-3 text-left">
+          <span>
+            <span className="block font-bold text-cream">Rate genres</span>
+            <span className="block text-sm text-dim">{ratedGenres ? `${ratedGenres} rated. ` : ''}Tell the app how much you like each kind of movie. It steers your suggestions straight away.</span>
+          </span>
+          <ChevronDown size={18} className={`shrink-0 text-dim transition-transform ${showGenres ? 'rotate-180' : ''}`} />
+        </button>
+        {showGenres && (
+          <ul className="flex flex-col divide-y divide-aisle/60">
+            {GENRE_CHOICES.map((g) => (
+              <li key={g.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0 truncate font-bold text-cream">{g.name}</span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <StarRating value={genreStars[g.name] || 0} onChange={(v) => onGenreStars(g.name, v)} size={26} label={`How much you like ${g.name}`} />
+                  <button type="button" onClick={() => onGenreStars(g.name, null)} disabled={!genreStars[g.name]} aria-label={`Clear ${g.name}`} className="rounded-full p-1.5 text-dim hover:text-cream disabled:invisible"><X size={14} /></button>
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
       </div>

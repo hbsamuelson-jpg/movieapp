@@ -24,7 +24,7 @@ export default function Browse({ entries, members, me, onWant, onOpen }) {
     setSoon({ state: 'loading', list: [] });
     comingSoon().then((list) => setSoon({ state: 'ready', list })).catch((e) => setSoon({ state: 'error', list: [], error: e.message }));
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
-  const taste = useMemo(() => tasteProfile(entries, me), [entries, me]);
+  const taste = useMemo(() => tasteProfile(entries, me), [entries, me, members]);
   const upcoming = useMemo(() => soon.list
     .map((movie) => ({ movie, fit: Math.round(predictStars(taste, movie) * 20) }))
     .sort((a, b) => (soonSort === 'date' ? a.movie.release.localeCompare(b.movie.release) : b.fit - a.fit))) // ties keep TMDB's order: most anticipated first, [soon.list, taste, soonSort]);

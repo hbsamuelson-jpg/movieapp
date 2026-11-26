@@ -155,15 +155,17 @@ export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(
  * means). Ignored while typing in a field, and
  * `enabled` lets a screen stand down (e.g. while a sheet is open on top of it).
  */
-export function useStarKeys({ stars, onStars, onSave, onUndo, enabled = true }) {
+export function useStarKeys({ stars, onStars, onSave, onUndo, onArrow, enabled = true }) {
   const latest = useRef({});
-  latest.current = { stars, onStars, onSave, onUndo, enabled };
+  latest.current = { stars, onStars, onSave, onUndo, onArrow, enabled };
   useEffect(() => {
     const onKey = (e) => {
       const now = latest.current;
       if (!now.enabled || e.metaKey || e.ctrlKey || e.altKey) return;
       if (/^(input|textarea|select)$/i.test(e.target?.tagName || '') || e.target?.isContentEditable) return;
       if (/^[1-5]$/.test(e.key)) { const n = Number(e.key); now.onStars(now.stars === n ? n - 0.5 : n); e.preventDefault(); }
+      // Arrow keys answer "haven't watched it" (the screen says which arrow means what). Off once stars are set.
+      else if (/^Arrow(Left|Down|Right)$/.test(e.key) && now.onArrow) { if (!now.stars) { now.onArrow(e.key); e.preventDefault(); } }
       else if (e.key === '0') { if (now.stars) { now.onStars(0); e.preventDefault(); } }
       // Delete (Backspace on a Mac keyboard) is undo: it takes back the stars just tapped, or, with none, the last movie.
       else if (e.key === 'Backspace' || e.key === 'Delete') { if (now.stars) now.onStars(0); else if (now.onUndo) now.onUndo(); e.preventDefault(); }

@@ -6,6 +6,9 @@ import Rank from './Rank.jsx';
 import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink, KeyHint, useStarKeys } from './ui.jsx';
 
 const PER_YEAR = [5, 10, 20];
+// Arrow keys for the three "haven't watched it" answers, laid out like the buttons: left, middle, right.
+const ARROWS = { ArrowLeft: 'unseen', ArrowDown: 'meh', ArrowRight: 'pass' };
+const ARROW_GLYPH = { unseen: '←', meh: '↓', pass: '→' };
 const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank 5']];
 
 /** Two ways to teach the app your taste: one poster at a time, or ranking a varied batch of five. */
@@ -101,7 +104,7 @@ function QuickSwipe({ entries, me, onRate }) {
     if (last.movie.year && last.movie.year !== year && years.includes(last.movie.year)) setYear(last.movie.year);
   };
   // Number keys rate the movie on screen (not while a movie's detail sheet is open on top).
-  useStarKeys({ stars, onStars: setStars, onUndo: undo, // Enter moves on: 3 stars or more is saved as "would watch again", fewer as plain watched, none skips.
+  useStarKeys({ stars, onStars: setStars, onUndo: undo, onArrow: (key) => movie && commit({ status: ARROWS[key], stars: null }), // Enter moves on: 3 stars or more is saved as "would watch again", fewer as plain watched, none skips.
     onSave: () => { if (!movie) return; if (stars > 0) commit({ status: stars > 2.5 ? 'again' : 'seen', stars }); else advance(false); }, enabled: !document.querySelector('[role="dialog"]') });
   const toggle = (list, set) => (value) => set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
   const toggleGenre = toggle(genres, setGenres);
@@ -178,7 +181,7 @@ function QuickSwipe({ entries, me, onRate }) {
                 <span className="col-span-2 text-center"><KeyHint>{stars > 2.5 ? 'Enter saves it as "watch again" and goes to the next movie.' : 'Enter saves it as watched and goes to the next movie.'}</KeyHint></span>
               </div>
             ) : (
-              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint>Keyboard: 1–5 for stars, the same key again for half a star less, Enter for the next movie, Delete to undo.</KeyHint></>
+              <><span className="text-xs text-dim">Watched it? Tap a star. The left half gives a half star.</span><KeyHint>Keyboard: 1–5 for stars, the same key again for half a star less, Enter for the next movie, Delete to undo, arrows for the buttons below.</KeyHint></>
             )}
           </div>
 
@@ -189,6 +192,7 @@ function QuickSwipe({ entries, me, onRate }) {
                 <button key={key} type="button" disabled={stars > 0} onClick={() => commit({ status: key, stars: null })} className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-sm font-bold transition ${stars > 0 ? 'bg-seat text-dim opacity-40' : key === 'unseen' ? 'bg-cream text-house' : 'bg-seat text-cream'}`}>
                   <s.icon size={20} />
                   {s.label}
+                  <kbd className="hidden rounded border border-current px-1.5 text-[11px] font-bold leading-4 opacity-60 md:block" aria-hidden="true">{ARROW_GLYPH[key]}</kbd>
                 </button>
               );
             })}

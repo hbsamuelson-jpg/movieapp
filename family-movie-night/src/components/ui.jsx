@@ -155,9 +155,9 @@ export const formatRuntime = (min) => (min ? `${Math.floor(min / 60)}h ${String(
  * means). Ignored while typing in a field, and
  * `enabled` lets a screen stand down (e.g. while a sheet is open on top of it).
  */
-export function useStarKeys({ stars, onStars, onSave, onUndo, onArrow, enabled = true }) {
+export function useStarKeys({ stars, onStars, onSave, onPlain, onUndo, onArrow, enabled = true }) {
   const latest = useRef({});
-  latest.current = { stars, onStars, onSave, onUndo, onArrow, enabled };
+  latest.current = { stars, onStars, onSave, onPlain, onUndo, onArrow, enabled };
   useEffect(() => {
     const onKey = (e) => {
       const now = latest.current;
@@ -172,8 +172,24 @@ export function useStarKeys({ stars, onStars, onSave, onUndo, onArrow, enabled =
       // Enter is taken even when a button has focus (you've usually just clicked a star or a tab); Space still presses buttons.
       else if (e.key === 'Enter' && now.onSave && !/^a$/i.test(e.target?.tagName || '')) { now.onSave(); e.preventDefault(); }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Shift by itself (pressed and let go with no other key) calls onPlain: on Quick Swipe that
+    // saves the stars as plain "watched", never "watch again". Shift+Enter does the same.
+    let shiftAlone = false;
+    const onDown = (e) => {
+      if (e.key === 'Shift') { shiftAlone = !e.repeat ? true : shiftAlone; return; }
+      shiftAlone = false;
+      const now = latest.current;
+      if (e.key === 'Enter' && e.shiftKey && now.enabled && now.onPlain && !/^(input|textarea|select|a)$/i.test(e.target?.tagName || '')) { now.onPlain(); e.preventDefault(); return; }
+      onKey(e);
+    };
+    const onUp = (e) => {
+      const now = latest.current;
+      if (e.key === 'Shift' && shiftAlone && now.enabled && now.onPlain && !/^(input|textarea|select)$/i.test(e.target?.tagName || '')) now.onPlain();
+      shiftAlone = false;
+    };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp); };
   }, []);
 }
 export const KeyHint = ({ children = 'Keyboard: 1–5 for stars, the same key again for half a star less, Enter to save.' }) => <span className="hidden text-xs text-dim md:block">{children}</span>;

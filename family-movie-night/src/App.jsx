@@ -55,6 +55,7 @@ export default function App() {
     if (!data) return undefined;
     const missing = Object.values(data.entries)
       .filter((e) => needsDetails(e.movie) && !triedRecently(e.movie) && !backfilled.current.has(String(e.movie.id)))
+      .sort(() => Math.random() - 0.5) // each phone starts somewhere different, so they don't duplicate lookups
       .slice(0, 8);
     if (!missing.length) return undefined;
     missing.forEach((e) => backfilled.current.add(String(e.movie.id)));

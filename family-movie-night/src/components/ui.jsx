@@ -257,14 +257,14 @@ export const Notice = ({ children }) => <p className="rounded-lg border border-v
  * The movie's title as a link to Rotten Tomatoes. There is no reliable way to know a movie's
  * exact Rotten Tomatoes address, so this opens their search for the title, which lists it first.
  */
-export const rtUrl = (movie) => `https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title || '')}`;
+export const rtUrl = (movie) => (movie.rtPath ? `https://www.rottentomatoes.com${movie.rtPath}` : `https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title || '')}`);
 /** Common Sense Media's age guidance. Their exact page address isn't knowable, so this opens their search for the title. */
 export const csmUrl = (movie) => `https://www.commonsensemedia.org/search/${encodeURIComponent(movie.title || '')}`;
 /** Two small links for any movie: its trailer and the parents' guide. */
 export const MovieLinks = ({ movie, trailer, className = '' }) => (
   <span className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
     <a href={trailer} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Play size={12} fill="currentColor" /> Trailer</a>
-    <a href={csmUrl(movie)} target="_blank" rel="noopener noreferrer" title="Age guidance on Common Sense Media" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Users size={12} /> Common Sense Media</a>
+    <a href={csmUrl(movie)} target="_blank" rel="noopener noreferrer" title="Age guidance on Common Sense Media" className="inline-flex items-center gap-1 rounded-full border border-aisle px-2.5 py-1 text-xs font-bold text-cream hover:border-dim"><Users size={12} /> Common Sense Media{typeof movie.age === 'number' ? <span className="font-normal text-gold">age {movie.age}+</span> : null}</a>
   </span>
 );
 export const TitleLink = ({ movie }) => (

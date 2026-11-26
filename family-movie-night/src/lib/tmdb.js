@@ -1,5 +1,5 @@
 // Movie catalog. Uses TMDB when a key is present, otherwise the built-in demo catalog.
-import { hasOmdb, hasTmdb, omdbKey, pref, tmdbKey } from './config.js';
+import { hasMdblist, hasOmdb, hasTmdb, mdblistKey, omdbKey, pref, tmdbKey } from './config.js';
 import { DEMO_CATALOG } from './demoData.js';
 
 const BASE = 'https://api.themoviedb.org/3';
@@ -264,7 +264,7 @@ export async function searchMovies(query) {
 
 /** Fill in runtime, MPAA rating and full genres. Returns the movie unchanged in demo mode or on failure. */
 /** True when a movie is missing details the app can still fetch (rating, runtime, crew, critic score). */
-export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!hasOmdb || movie.scored === SCORE_VERSION) && watchFresh(movie));
+export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!(hasOmdb || hasMdblist) || movie.scored === SCORE_VERSION) && watchFresh(movie));
 
 /* ---------- Where to watch ---------- */
 // TMDB relays JustWatch's list of which US services carry each movie. The same service shows up
@@ -342,10 +342,13 @@ export async function enrich(movie) {
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
     // A score already saved with the movie is kept, so refreshing where-to-watch costs no lookups.
     noteLookedUp(movie.id);
-    const critics = movie.scored === SCORE_VERSION ? { rt: movie.rt ?? null, mc: movie.mc ?? null, checked: true } : await criticScores(raw.imdb_id);
+    const critics = movie.scored === SCORE_VERSION ? { rt: movie.rt ?? null, mc: movie.mc ?? null, rtPath: movie.rtPath ?? null, age: movie.age ?? null, checked: true } : await criticScores(movie.id, raw.imdb_id);
     return {
       ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []),
-      imdb: raw.imdb_id || null, rt: critics.rt, mc: critics.mc, scored: critics.checked ? SCORE_VERSION : false, detailed: true,
+      imdb: raw.imdb_id || null,
+      // A lookup that couldn't be made (daily limit, no connection) never wipes a score already saved.
+      rt: critics.rt ?? (critics.checked ? null : movie.rt ?? null), mc: critics.mc ?? (critics.checked ? null : movie.mc ?? null),
+      rtPath: critics.rtPath ?? movie.rtPath ?? null, age: critics.age ?? movie.age ?? null, scored: critics.checked ? SCORE_VERSION : false, detailed: true,
       watch: whereToWatch(raw['watch/providers']?.results), trailer: trailerKey(raw.videos?.results),
     };
   } catch {
@@ -359,8 +362,10 @@ export async function enrich(movie) {
 // both and shows Rotten Tomatoes when it exists. Its free key allows a limited number of
 // lookups a day, so every answer is cached on the device and saved with the movie once rated.
 
-const SCORE_VERSION = 2; // bump to make every device look scores up again
-const SCORE_CACHE = 'score-cache-v2';
+// With an MDBList key the scores are looked up again once (version 3), since it knows Rotten
+// Tomatoes scores the older source doesn't. Without one, nothing changes (version 2).
+const SCORE_VERSION = hasMdblist ? 3 : 2;
+const SCORE_CACHE = hasMdblist ? 'score-cache-v3' : 'score-cache-v2';
 let scoreCache = null;
 const scoreStore = () => (scoreCache ||= pref.get(SCORE_CACHE, {}));
 const remember = (imdbId, scores) => {
@@ -372,24 +377,64 @@ const remember = (imdbId, scores) => {
 };
 const percent = (value) => { const n = parseInt(value, 10); return Number.isFinite(n) ? n : null; };
 
-/** Returns { rt, mc, checked }: each score is 0–100 or null. `checked` is false when the lookup could not be made at all. */
-async function criticScores(imdbId) {
+/**
+ * MDBList: one lookup by TMDB id gives the Rotten Tomatoes and Metacritic scores, the movie's
+ * own Rotten Tomatoes address and Common Sense Media's recommended age.
+ * Returns { rt, mc, rtPath, age } or 'missing' (it doesn't know the movie) or null (couldn't ask:
+ * no key, the daily limit, or no connection).
+ */
+async function mdblistScores(tmdbId) {
+  if (!hasMdblist) return null;
+  try {
+    const res = await fetch(`https://api.mdblist.com/tmdb/movie/${tmdbId}?apikey=${mdblistKey}`);
+    if (res.status === 404) return 'missing';
+    if (!res.ok) return null;
+    const data = await res.json();
+    const from = (source) => (data.ratings || []).find((r) => r.source === source);
+    const whole = (r) => (typeof r?.value === 'number' ? Math.round(r.value) : null);
+    const tomatoes = from('tomatoes');
+    return {
+      rt: whole(tomatoes), mc: whole(from('metacritic')),
+      rtPath: typeof tomatoes?.url === 'string' && tomatoes.url.startsWith('/m/') ? tomatoes.url : null,
+      // Only Common Sense Media's own age; MDBList's general age_rating is a guess from the MPAA rating when they haven't reviewed it.
+      age: data.commonsense && Number.isFinite(data.commonsense_media?.common_sense) ? data.commonsense_media.common_sense : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns { rt, mc, rtPath, age, checked }: each score is 0–100 or null. `checked` is false when
+ * the lookup should be tried again later. MDBList is asked first; OMDb fills in when MDBList
+ * can't be asked or doesn't know the movie.
+ */
+async function criticScores(tmdbId, imdbId) {
+  const cache = scoreStore();
+  const key = hasMdblist ? `t${tmdbId}` : imdbId;
+  if (key && cache[key]) return { ...cache[key], checked: true };
+  const first = await mdblistScores(tmdbId);
+  if (first && first !== 'missing') { remember(key, first); return { ...first, checked: true }; }
+  const second = await omdbScores(imdbId);
+  // With an MDBList key, only its answer (or its "don't know this one") settles the matter.
+  const settled = hasMdblist ? first === 'missing' : second.checked;
+  if (settled && key) remember(key, { rt: second.rt, mc: second.mc });
+  return { rt: second.rt, mc: second.mc, rtPath: null, age: null, checked: settled };
+}
+
+async function omdbScores(imdbId) {
   const none = { rt: null, mc: null };
   if (!hasOmdb || !imdbId) return { ...none, checked: false };
-  const cache = scoreStore();
-  if (cache[imdbId]) return { ...cache[imdbId], checked: true };
   try {
     const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${omdbKey}`);
     const data = await res.json();
     if (data.Response === 'False') {
       // "Movie not found" is a real answer; a bad key or a used-up daily limit is not.
       const settled = /not found|incorrect imdb/i.test(data.Error || '');
-      if (settled) remember(imdbId, none);
       return { ...none, checked: settled };
     }
     const from = (source) => (data.Ratings || []).find((r) => r.Source === source)?.Value;
     const scores = { rt: percent(from('Rotten Tomatoes')), mc: percent(from('Metacritic')) ?? percent(data.Metascore) };
-    remember(imdbId, scores);
     return { ...scores, checked: true };
   } catch {
     return { ...none, checked: false };

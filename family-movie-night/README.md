@@ -240,6 +240,8 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Testing without the real database.** `npm run emulators` starts local Firebase emulators (needs Java); build with `VITE_EMULATOR=true` and any placeholder Firebase values to point the app at them. Nothing in that mode touches the real project or its daily limit.
 
+**Rotten Tomatoes scores (MDBList).** With `VITE_MDBLIST_API_KEY` set (free key from mdblist.com → Preferences → API Access, 1,000 lookups a day), the app asks MDBList first for each movie's scores. One lookup returns the Rotten Tomatoes and Metacritic scores, the movie's own Rotten Tomatoes address and Common Sense Media's recommended age. So the badge shows Rotten Tomatoes for nearly every movie, the title links straight to the movie's Rotten Tomatoes page, and the Common Sense Media link shows "age 14+" when they've reviewed it. OMDb stays as the fallback when MDBList's daily limit is reached or it doesn't know a movie; a failed lookup never wipes a score already saved. Movies rated before the key was added are looked up again in the background, a few at a time.
+
 **Title links.** On a movie's detail sheet and on the Quick Swipe card, the title opens Rotten Tomatoes in a new tab. It goes to their search results for that title (the movie is the top result), because nothing the app has access to gives a movie's exact Rotten Tomatoes address.
 
 **Review scores.** A movie's score is its Rotten Tomatoes critics score when the app has one, otherwise its Metacritic score, otherwise the TMDB audience score. Tonight's ranking gives well-reviewed movies a small nudge: up to 4 points either way, centred on a score of 65. It breaks near-ties; it does not outweigh what people actually want.

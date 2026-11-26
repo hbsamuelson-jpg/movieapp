@@ -226,7 +226,9 @@ It is anonymous by construction: the app stores who has voted and how many votes
 
 **Bigger, bolder text.** A switch under People and settings (tap the avatars, top right). It makes all text about 20% larger and heavier and is remembered per device.
 
-**On a computer.** From about 1024px wide the app uses the width of the screen: Tonight puts the controls and shortlist on the left and suggestions on the right; Quick Swipe shows a large poster beside the rating controls; Mine, History and Search results go to two columns.
+**On a computer.** From about 1024px wide the app uses the whole window (up to 1700px). Tonight puts the controls and shortlist on the left and suggestions on the right, in two columns on wide windows. Mine goes to three columns on wide windows: picks, then favourites, taste and genres, then ratings. History and Search results use two columns.
+
+**Quick Swipe fits the window.** The poster is sized from the window's height, on computers and phones, so the movie and every rating control are on screen without scrolling (very short screens, such as an iPhone SE, still scroll a little). On a computer the filter, Ask for a list, Best of all time and Undo share one row. On a phone, Ask for a list and Best of all time sit behind a **Lists** button, and the three greyed-out buttons step aside once stars are set.
 
 **Rating sheet.** Once you give stars, the three "Haven't watched it" buttons grey out. Tapping one still works: it clears the stars and switches your answer.
 

@@ -314,13 +314,13 @@ function Shell({ children, right, nav }) {
   return (
     <div className="flex h-full flex-col">
       <header className="shrink-0 border-b border-aisle">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3 lg:max-w-6xl lg:px-8">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3 lg:max-w-[1700px] lg:px-8">
           <h1 className="truncate font-display text-xl leading-none text-gold">Family Movie Night</h1>
           {right}
         </div>
       </header>
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-4 py-5 lg:max-w-6xl lg:px-8">{children}</div>
+        <div className="mx-auto max-w-2xl px-4 py-5 lg:max-w-[1700px] lg:px-8">{children}</div>
       </main>
       {nav}
     </div>

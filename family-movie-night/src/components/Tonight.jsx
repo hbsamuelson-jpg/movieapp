@@ -251,7 +251,7 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
         )}
 
         {shown.length ? (
-          <ol className="-mx-2 flex flex-col divide-y divide-aisle/60">
+          <ol className="-mx-2 flex flex-col divide-y divide-aisle/60 xl:grid xl:grid-cols-2 xl:gap-x-8">
             {shown.slice(0, limit).map((e, n) => (
               <MovieRow key={e.movie.id} movie={e.movie} index={n + 1} onOpen={onOpen} note={note(e)} aside={<MemberDots entry={e} members={present} />} action={<AddButton movie={e.movie} />} />
             ))}

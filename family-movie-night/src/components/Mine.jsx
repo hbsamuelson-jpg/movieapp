@@ -25,9 +25,11 @@ export default function Mine({ entries, members, me, genreRank, onGenreRank, onW
   const people = taste.people.slice(0, 6);
 
   return (
-    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-10">
-      <div className="flex min-w-0 flex-col gap-5">
+    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-10 xl:grid-cols-3">
+      {/* Wide screens: picks | favourites, taste and genres | ratings. */}
+      <div className="flex min-w-0 flex-col gap-5 xl:col-span-2 xl:grid xl:grid-cols-2 xl:items-start xl:gap-10">
       <ForYou entries={entries} members={members} me={me} onOpen={onOpen} onWant={onWant} onPass={onPass} />
+      <div className="flex min-w-0 flex-col gap-5">
 
       <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
         <div className="flex items-center gap-2"><Heart size={17} className="text-gold" fill="currentColor" /><h2 className="font-bold text-cream">My favourites of all time</h2></div>
@@ -83,6 +85,7 @@ export default function Mine({ entries, members, me, genreRank, onGenreRank, onW
       </section>
 
       <GenreRank ranked={genreRank} onChange={onGenreRank} />
+      </div>
       </div>
 
       <section className="flex min-w-0 flex-col gap-3">

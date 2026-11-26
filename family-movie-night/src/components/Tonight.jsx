@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Dices, Plus, SlidersHorizontal, X } from 'lucide-react';
+import { Check, ChevronDown, Dices, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { CERTS } from '../lib/config.js';
-import { applyFilters, suggest } from '../lib/suggest.js';
-import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Poster } from './ui.jsx';
+import { applyFilters, mergeSimilar, suggest } from '../lib/suggest.js';
+import { enrich, GENRE_CHOICES, searchMovies, similarTo } from '../lib/tmdb.js';
+import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, Poster } from './ui.jsx';
 
 const RUNTIMES = [[0, 'Any length'], [90, '90 min or less'], [105, '1h 45m or less'], [120, '2 hours or less']];
 
@@ -12,12 +13,33 @@ export default function Tonight({ entries, members, me, shortlist, onShortlist, 
   const [filters, setFilters] = useState({ genre: '', certs: [], maxRuntime: 0 });
   const [showFilters, setShowFilters] = useState(false);
   const [spinning, setSpinning] = useState(false);
+  const [vibes, setVibes] = useState([]); // tonight's priority genres: boosted, never a hard filter
+  const [seeds, setSeeds] = useState([]); // "movies like…" reference movies
+  const [simLists, setSimLists] = useState({}); // seed id -> [{ movie, sim }]
+  const [simError, setSimError] = useState('');
+
+  // Look up similar movies for each new seed, and fill in rating and runtime for the best matches.
+  useEffect(() => {
+    seeds.filter((seed) => !simLists[seed.id]).forEach(async (seed) => {
+      try {
+        setSimError('');
+        const list = await similarTo(seed);
+        const detailed = await Promise.all(list.slice(0, 24).map((x) => enrich(x.movie).then((movie) => ({ ...x, movie }))));
+        setSimLists((all) => ({ ...all, [seed.id]: [...detailed, ...list.slice(24)] }));
+      } catch (e) {
+        setSimError(e.message);
+        setSeeds((list) => list.filter((x) => x.id !== seed.id));
+      }
+    });
+  }, [seeds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const seeking = seeds.some((seed) => !simLists[seed.id]);
+  const similar = useMemo(() => mergeSimilar(seeds.map((seed) => simLists[seed.id] || []), seeds.map((seed) => seed.id)), [seeds, simLists]);
 
   const present = members.filter((m) => !away.includes(m.id));
   const presentIds = present.map((m) => m.id);
   const toggle = (id) => setAway((a) => (a.includes(id) ? a.filter((x) => x !== id) : present.length > 1 ? [...a, id] : a));
 
-  const ranked = useMemo(() => suggest(entries, presentIds), [entries, presentIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ranked = useMemo(() => (seeking ? [] : suggest(entries, presentIds, { priorityGenres: vibes, similar })), [entries, presentIds.join(), vibes, similar, seeking]); // eslint-disable-line react-hooks/exhaustive-deps
   const genres = useMemo(() => [...new Set(ranked.flatMap((e) => e.movie.genres || []))].sort(), [ranked]);
   const shown = applyFilters(ranked, filters);
   const activeFilters = (filters.genre ? 1 : 0) + filters.certs.length + (filters.maxRuntime ? 1 : 0);
@@ -27,10 +49,15 @@ export default function Tonight({ entries, members, me, shortlist, onShortlist, 
   const toggleListed = (movie) => onShortlist(listed(movie) ? shortlist.filter((m) => String(m.id) !== String(movie.id)) : [...shortlist, movie]);
 
   const names = present.length === members.length && members.length > 1 ? 'everyone' : present.map((m) => (m.id === me ? 'you' : m.name)).join(', ');
+  const seeded = seeds.length > 0;
+  const seedNames = seeds.map((m) => m.title).join(' and ');
+  const toggleVibe = (g) => setVibes((v) => (v.includes(g) ? v.filter((x) => x !== g) : [...v, g]));
+  const wantText = (e) => (e.wanting === 0 ? (e.ratings && Object.keys(e.ratings).length ? 'nobody has asked for it yet' : present.length > 1 ? 'new to everyone' : 'new to you')
+    : e.wanting === present.length ? (present.length > 1 ? 'all want it' : 'on your list') : `${e.wanting} of ${present.length} want it`);
   const note = (e) => (
     <>
       <span className="font-bold text-gold">{e.score}% match</span>
-      <span className="text-dim"> · {e.wanting === present.length ? (present.length > 1 ? 'all want it' : 'on your list') : `${e.wanting} of ${present.length} want it`}{e.rewatch ? ' · rewatch for some' : ''}</span>
+      <span className="text-dim"> · {wantText(e)}{e.rewatch ? ' · rewatch for some' : ''}{e.vibes.length ? ` · ${e.vibes.join(', ')} boost` : ''}</span>
     </>
   );
   const AddButton = ({ movie }) => {
@@ -63,6 +90,21 @@ export default function Tonight({ entries, members, me, shortlist, onShortlist, 
         </section>
       )}
 
+      <section className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-dim">In the mood for</h2>
+          <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
+            {GENRE_CHOICES.map((g) => <Chip key={g.id} on={vibes.includes(g.name)} onClick={() => toggleVibe(g.name)}>{g.name}</Chip>)}
+          </div>
+          {vibes.length > 0 && <p className="text-xs text-dim">{vibes.join(', ')} movies get a big boost. Great picks from other genres still show.</p>}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-dim">Movies like…</h2>
+          <SeedPicker seeds={seeds} onAdd={(m) => setSeeds((list) => (list.some((x) => x.id === m.id) ? list : [...list, m]))} onRemove={(id) => setSeeds((list) => list.filter((x) => x.id !== id))} />
+          {simError && <Notice>{simError}</Notice>}
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2 rounded-xl bg-seat p-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-bold text-cream">Tonight's shortlist <span className="font-normal tabular-nums text-dim">{shortlist.length || ''}</span></h2>
@@ -86,8 +128,8 @@ export default function Tonight({ entries, members, me, shortlist, onShortlist, 
       <section className="flex flex-col gap-3">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-cream">Suggested for {names}</h2>
-            <p className="text-sm text-dim">Ranked from everyone's ratings and what each person tends to like.</p>
+            <h2 className="text-xl font-bold text-cream">{seeded ? `Like ${seedNames}` : `Suggested for ${names}`}</h2>
+            <p className="text-sm text-dim">{seeded ? `Similar movies, ranked for ${names}. Anything someone here ruled out is left off.` : "Ranked from everyone's ratings and what each person tends to like."}</p>
           </div>
           <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${activeFilters ? 'border-gold text-gold' : 'border-aisle text-cream'}`}>
             <SlidersHorizontal size={15} /> Filters{activeFilters ? ` (${activeFilters})` : ''}
@@ -113,13 +155,61 @@ export default function Tonight({ entries, members, me, shortlist, onShortlist, 
           </ol>
         ) : (
           <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-aisle p-5 text-sm text-dim">
-            <p>{ranked.length ? 'Nothing matches these filters.' : 'No suggestions yet. They appear once someone here marks a movie Want to or Watch again, and get sharper the more each person rates.'}</p>
+            <p>{seeking ? `Finding movies like ${seedNames}…` : ranked.length ? 'Nothing matches these filters.' : seeded ? `Nothing similar to ${seedNames} is left after everyone's vetoes. Try a different movie.` : 'No suggestions yet. They appear once someone here marks a movie Want to or Watch again, and get sharper the more each person rates. Or type a movie under "Movies like…" above.'}</p>
             <button type="button" onClick={onRate} className="rounded-lg bg-velvet px-4 py-2 font-bold text-cream">Rate some movies</button>
           </div>
         )}
       </section>
 
       {spinning && <SpinReel pool={spinPool} onClose={() => setSpinning(false)} onOpen={(m) => { setSpinning(false); onOpen(m); }} />}
+    </div>
+  );
+}
+
+/** Type a title, pick it from the results, and it becomes a "movies like this" reference. */
+function SeedPicker({ seeds, onAdd, onRemove }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setResults([]); return undefined; }
+    let live = true;
+    const timer = setTimeout(() => {
+      searchMovies(q).then((list) => live && setResults(list.slice(0, 6))).catch(() => live && setResults([]));
+    }, 300);
+    return () => { live = false; clearTimeout(timer); };
+  }, [query]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {seeds.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {seeds.map((m) => (
+            <span key={m.id} className="inline-flex items-center gap-1 rounded-full bg-gold py-1 pl-3 pr-1 text-sm font-bold text-house">
+              {m.title}
+              <button type="button" onClick={() => onRemove(m.id)} aria-label={`Remove ${m.title}`} className="rounded-full p-1 hover:bg-black/10"><X size={14} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative">
+        <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dim" />
+        <input id="seed-search" type="search" autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={seeds.length ? 'Add another movie' : 'Type a movie, e.g. Knives Out'} aria-label="Find movies similar to" className="w-full rounded-full border border-aisle bg-seat py-2.5 pl-9 pr-3 text-sm text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
+      </div>
+      {results.length > 0 && (
+        <ul className="flex flex-col overflow-hidden rounded-xl border border-aisle bg-seat">
+          {results.map((m) => (
+            <li key={m.id}>
+              <button type="button" onClick={() => { onAdd(m); setQuery(''); setResults([]); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-aisle">
+                <span className="w-7 shrink-0"><Poster movie={m} size="w92" className="rounded-sm" /></span>
+                <span className="min-w-0 flex-1 truncate font-bold text-cream">{m.title}</span>
+                <span className="tabular-nums text-dim">{m.year || ''}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

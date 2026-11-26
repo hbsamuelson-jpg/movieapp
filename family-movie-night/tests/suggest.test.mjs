@@ -1,6 +1,6 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { predictStars, suggest, tasteProfile } from '../src/lib/suggest.js';
+import { mergeSimilar, predictStars, rankToStars, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
 const seen = (stars) => ({ status: 'seen', stars });
@@ -44,4 +44,34 @@ assert.ok(!titles.includes('Space One'), 'b gave it 2 stars');
 assert.ok(suggest(entries, ['a', 'b']).some((e) => e.movie.title === 'Vetoed'), 'c is not here, so c\'s veto does not count');
 assert.ok(suggest(entries, ['a']).some((e) => e.movie.title === 'Space Three'));
 assert.deepEqual(suggest(entries, []), []);
+
+// Tonight's vibe: a priority genre lifts matching movies without hiding the rest.
+const vibe = suggest(entries, ['a'], { priorityGenres: ['Comedy'] });
+const plain = suggest(entries, ['a']);
+assert.equal(vibe.length, plain.length, 'priority genre never hides anything');
+const boosted = suggest({ ...entries, 10: { movie: movie(10, 'Funny Want', ['Comedy']), ratings: { a: want } } }, ['a'], { priorityGenres: ['Comedy'] });
+assert.equal(boosted[0].movie.title, 'Funny Want');
+assert.deepEqual(boosted[0].vibes, ['Comedy']);
+
+// "Movies like…": similar movies become candidates even if nobody rated them; vetoes still apply.
+const similar = [
+  { movie: movie(50, 'Fresh Similar', ['Mystery'], 8), sim: 0.9 },
+  { movie: movie(51, 'Weak Similar', ['Mystery'], 8), sim: 0.3 },
+  { movie: movie(8, 'Vetoed', ['Adventure'], 9), sim: 1 },
+  { movie: movie(1, 'Space One', ['Sci-Fi']), sim: 1 },
+];
+const like = suggest(entries, ['a', 'b', 'c'], { similar }).map((e) => e.movie.title);
+assert.deepEqual(like, ['Fresh Similar', 'Weak Similar'], 'only similar movies, best first, minus vetoes');
+assert.ok(!suggest(entries, ['a'], { similar: [{ movie: movie(4, 'Laughs', ['Comedy']), sim: 1 }] }).length, 'a already rated Laughs 2 stars: ruled out');
+
+// Several seeds: similar to both beats similar to one.
+const merged = mergeSimilar([[{ movie: movie(60, 'Both'), sim: 0.6 }, { movie: movie(61, 'One'), sim: 0.7 }], [{ movie: movie(60, 'Both'), sim: 0.6 }, { movie: movie(99, 'Seed'), sim: 1 }]], [99]);
+assert.deepEqual(merged.map((x) => x.movie.title), ['Both', 'One']);
+
+// Rank 5 → stars: 5 down to 2.5, never a veto unless flagged.
+assert.deepEqual(rankToStars(5), [5, 4.5, 3.5, 3, 2.5]);
+assert.deepEqual(rankToStars(4), [5, 4, 3.5, 2.5]);
+assert.deepEqual(rankToStars(3), [5, 3.5, 2.5]);
+assert.equal(rankToStars(5, [false, false, false, false, true])[4], 1.5);
+assert.ok(rankToStars(5).every((s) => s > 2), 'no accidental vetoes');
 console.log('\nAll suggestion checks passed.');

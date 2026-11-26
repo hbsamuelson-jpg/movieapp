@@ -58,25 +58,94 @@ function memberScore(rating, profile, movie) {
 
 /**
  * Rank movies for the people who are here tonight.
- * A movie is suggested when nobody present ruled it out and at least one person present
- * wants to watch (or rewatch) it. Everyone else is scored from their rating, or from their
- * taste profile if they haven't rated it. The group score favours picks nobody will hate.
+ *
+ * Without seeds: a movie is suggested when nobody present ruled it out and at least one person
+ * present wants to watch (or rewatch) it.
+ *
+ * With `similar` (from "Movies like…"): the list becomes the movies similar to the seeds.
+ * Nobody needs to have asked for them, but vetoes still apply, and a movie everyone present
+ * has already watched is left out.
+ *
+ * Everyone is scored from their rating, or from their taste profile if they haven't rated it.
+ * The group score favours picks nobody will hate. Then two steers are applied:
+ *   priorityGenres — tonight's vibe: +15 for matching one, +5 for each further match (max +25)
+ *   similar        — blends 65% group score with 35% similarity to the seeds
+ *
+ * options: { priorityGenres: string[], similar: [{ movie, sim }] }
  */
-export function suggest(entries, presentIds) {
+export function suggest(entries, presentIds, { priorityGenres = [], similar = [] } = {}) {
   if (!presentIds.length) return [];
   const profiles = Object.fromEntries(presentIds.map((id) => [id, tasteProfile(entries, id)]));
+  const seeded = similar.length > 0;
+  const simById = new Map(similar.map((x) => [String(x.movie.id), x]));
+
+  // Candidates: everything anyone has rated, plus (when seeded) similar movies nobody has touched.
+  const candidates = seeded
+    ? similar.map((x) => entries[x.movie.id] || { movie: x.movie, ratings: {} })
+    : Object.values(entries);
+
   const out = [];
-  for (const entry of Object.values(entries)) {
+  for (const entry of candidates) {
     const parts = presentIds.map((id) => ({ id, ...memberScore(entry.ratings?.[id], profiles[id], entry.movie) }));
     if (parts.some((p) => p.kind === 'veto')) continue;
     const wanting = parts.filter((p) => p.kind === 'want' || p.kind === 'again');
-    if (!wanting.length) continue;
+    if (!seeded && !wanting.length) continue;
+    if (seeded && parts.every((p) => p.kind === 'seen')) continue;
+
     const scores = parts.map((p) => p.score);
     const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
-    const score = Math.round(avg * 0.7 + Math.min(...scores) * 0.3);
-    out.push({ ...entry, score, parts, wanting: wanting.length, rewatch: parts.some((p) => p.kind === 'again' || p.kind === 'seen') });
+    let raw = avg * 0.7 + Math.min(...scores) * 0.3;
+
+    const sim = simById.get(String(entry.movie.id))?.sim || 0;
+    if (seeded) raw = raw * 0.65 + sim * 100 * 0.35;
+
+    const vibes = priorityGenres.filter((g) => (entry.movie.genres || []).includes(g));
+    if (vibes.length) raw += Math.min(25, 15 + 5 * (vibes.length - 1));
+
+    out.push({
+      ...entry,
+      rank: raw, // unclamped, so boosted movies still sort among themselves
+      score: Math.max(0, Math.min(100, Math.round(raw))),
+      parts,
+      wanting: wanting.length,
+      rewatch: parts.some((p) => p.kind === 'again' || p.kind === 'seen'),
+      sim,
+      vibes,
+    });
   }
-  return out.sort((a, b) => b.score - a.score || a.movie.title.localeCompare(b.movie.title));
+  return out.sort((a, b) => b.rank - a.rank || a.movie.title.localeCompare(b.movie.title));
+}
+
+/**
+ * Combine the similar-lists of several seed movies into one. A movie similar to more than one
+ * seed scores higher. Seeds themselves are dropped.
+ */
+export function mergeSimilar(lists, seedIds = []) {
+  const merged = new Map();
+  for (const list of lists) {
+    for (const { movie, sim } of list) {
+      const key = String(movie.id);
+      if (seedIds.map(String).includes(key)) continue;
+      const prev = merged.get(key);
+      merged.set(key, prev ? { movie: prev.movie.detailed ? prev.movie : movie, best: Math.max(prev.best, sim), sum: prev.sum + sim } : { movie, best: sim, sum: sim });
+    }
+  }
+  return [...merged.values()]
+    .map((x) => ({ movie: x.movie, sim: Math.min(1, x.best + 0.5 * (x.sum - x.best)) }))
+    .sort((a, b) => b.sim - a.sim);
+}
+
+const RANK_STARS = { 1: [4], 2: [4.5, 3], 3: [5, 3.5, 2.5], 4: [5, 4, 3.5, 2.5], 5: [5, 4.5, 3.5, 3, 2.5] };
+
+/**
+ * Turn a best-to-worst ranking into star ratings: the top pick gets 5, the middle 3.5, the
+ * bottom 2.5. 2.5 is deliberately above the 2-star veto line, because finishing last in a
+ * batch is not the same as never wanting to see it again. A movie flagged "never again" gets
+ * 1.5 instead, which does rule it out.
+ */
+export function rankToStars(count, flagged = []) {
+  const stars = RANK_STARS[Math.min(5, Math.max(1, count))];
+  return Array.from({ length: count }, (_, n) => (flagged[n] ? 1.5 : stars[Math.min(n, stars.length - 1)]));
 }
 
 /** filters: { genre: string | '', certs: string[], maxRuntime: number | 0 } */

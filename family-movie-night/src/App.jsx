@@ -30,7 +30,6 @@ export default function App() {
   const [tab, setTab] = useState('tonight');
   const [showGroup, setShowGroup] = useState(false);
   const [open, setOpen] = useState(null);
-  const [includeR, setIncludeR] = useState(() => pref.get('include-r', false));
   const [updateReady, setUpdateReady] = useState(false);
 
   useEffect(() => watchForUpdates(() => setUpdateReady(true)), []);
@@ -95,13 +94,12 @@ export default function App() {
       {showGroup ? (
         <Group
           members={members} me={me}
-          includeR={includeR} onIncludeR={(v) => { setIncludeR(v); pref.set('include-r', v); }}
           onSwitch={() => choose(null)} onAdd={(name) => store.addMember(name)} onRemove={(id) => store.removeMember(id)}
         />
       ) : (
         <>
           {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} onRate={() => go('rate')} />}
-          {tab === 'rate' && <Rate entries={entries} me={me} includeR={includeR} onRate={rate} />}
+          {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'search' && <Browse entries={entries} members={members} onOpen={setOpen} />}
           {tab === 'mine' && <Mine entries={entries} me={me} onOpen={setOpen} onRate={() => go('rate')} />}
         </>

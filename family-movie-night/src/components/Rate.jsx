@@ -1,54 +1,80 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { hasTmdb, pref } from '../lib/config.js';
-import { FIRST_YEAR, GENRE_CHOICES, THIS_YEAR, topOfYear } from '../lib/tmdb.js';
+import { ERAS, GENRE_CHOICES, topOfYear, yearsFor } from '../lib/tmdb.js';
+import Rank from './Rank.jsx';
 import { CertBadge, Chip, NOT_WATCHED, Notice, Poster, StarRating, STATUS } from './ui.jsx';
 
 const PER_YEAR = [5, 10, 20];
-const DECADES = [];
-for (let y = Math.floor(THIS_YEAR / 10) * 10; y >= FIRST_YEAR; y -= 10) DECADES.push(y);
+const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank 5']];
+
+/** Two ways to teach the app your taste: one poster at a time, or ranking a varied batch of five. */
+export default function Rate({ entries, me, onRate }) {
+  const [mode, setMode] = useState(() => pref.get('rate-mode', 'swipe'));
+  const choose = (m) => { setMode(m); pref.set('rate-mode', m); };
+  return (
+    <div className="mx-auto flex max-w-md flex-col gap-4">
+      <div className="grid grid-cols-2 gap-1 rounded-full bg-seat p-1" role="tablist" aria-label="Rating mode">
+        {MODES.map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => choose(id)} className={`rounded-full py-2 text-sm font-bold transition ${mode === id ? 'bg-gold text-house' : 'text-dim hover:text-cream'}`}>{label}</button>
+        ))}
+      </div>
+      {mode === 'swipe' ? <QuickSwipe entries={entries} me={me} onRate={onRate} /> : <Rank entries={entries} me={me} onRate={onRate} />}
+    </div>
+  );
+}
 
 /**
- * Rate-through. One poster at a time: the top movies of a year, then the year before, and so on.
- * Watched it? Tap the stars. Haven't? Want to, Don't care, or No thanks.
- * Narrow it to categories you've seen a lot of, change how many per year, or jump to a decade.
- * It remembers where you stopped.
+ * Quick Swipe. One poster at a time: the top movies of a year, then the year before.
+ * The setup bar combines categories AND eras, so you can work through, say, 1990s sci-fi and
+ * comedy only. It skips what you've rated and remembers where you stopped.
  */
-export default function Rate({ entries, me, includeR, onRate }) {
+function QuickSwipe({ entries, me, onRate }) {
   const [perYear, setPerYear] = useState(() => pref.get('rate-per-year', 10));
   const [genres, setGenres] = useState(() => pref.get('rate-genres', []));
-  const [year, setYear] = useState(() => pref.get('rate-year', THIS_YEAR));
+  const [eras, setEras] = useState(() => pref.get('rate-eras', []));
+  const years = useMemo(() => yearsFor(eras), [eras]);
+  const [year, setYear] = useState(() => pref.get('rate-year', null) ?? years[0]);
   const [movies, setMovies] = useState(null); // null while this year is loading
   const [error, setError] = useState('');
   const [handled, setHandled] = useState(() => new Set()); // rated or skipped this session
   const [history, setHistory] = useState([]); // [{ movie, rated }] for Undo
   const [stars, setStars] = useState(0);
-  const [showOptions, setShowOptions] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const request = useRef(0);
 
   useEffect(() => { pref.set('rate-per-year', perYear); }, [perYear]);
   useEffect(() => { pref.set('rate-genres', genres); }, [genres]);
+  useEffect(() => { pref.set('rate-eras', eras); }, [eras]);
   useEffect(() => { pref.set('rate-year', year); }, [year]);
 
+  // If the eras change and the current year falls outside them, restart from the newest allowed year.
+  const finished = year === null;
   const genreKey = genres.join('|');
+  useEffect(() => { if (finished || !years.includes(year)) setYear(years[0]); }, [years, genreKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const inRange = years.includes(year);
+
   const load = () => {
+    if (finished || !inRange) return;
     const ticket = ++request.current;
     setMovies(null);
     setError('');
-    topOfYear({ year, perYear, genres, includeR })
+    topOfYear({ year, perYear, genres })
       .then((list) => { if (ticket === request.current) setMovies(list); })
       .catch((e) => { if (ticket === request.current) setError(e.message); });
   };
-  useEffect(load, [year, perYear, genreKey, includeR]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, [year, perYear, genreKey, inRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todo = (movies || []).filter((m) => !handled.has(String(m.id)) && !entries[m.id]?.ratings?.[me]);
-  const movie = todo[0];
-  const finished = year < FIRST_YEAR;
+  const movie = finished ? null : todo[0];
 
-  // This year is done (or had nothing): step back a year.
+  // This year is done (or had nothing): step to the next year in the list.
   useEffect(() => {
-    if (movies && !todo.length && !finished && !error) setYear((y) => y - 1);
-  }, [movies, todo.length, finished, error]);
+    if (movies && !todo.length && !finished && inRange && !error) {
+      const next = years[years.indexOf(year) + 1];
+      setYear(next === undefined ? null : next);
+    }
+  }, [movies, todo.length, finished, inRange, error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advance = (rated) => {
     setHandled((s) => new Set(s).add(String(movie.id)));
@@ -63,47 +89,45 @@ export default function Rate({ entries, me, includeR, onRate }) {
     setHandled((s) => { const next = new Set(s); next.delete(String(last.movie.id)); return next; });
     setHistory((h) => h.slice(0, -1));
     setStars(0);
-    if (last.movie.year && last.movie.year !== year) setYear(last.movie.year);
+    if (last.movie.year && last.movie.year !== year && years.includes(last.movie.year)) setYear(last.movie.year);
   };
-  const toggleGenre = (name) => setGenres((g) => (g.includes(name) ? g.filter((x) => x !== name) : [...g, name]));
+  const toggle = (list, set) => (value) => set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
+  const toggleGenre = toggle(genres, setGenres);
+  const toggleEra = toggle(eras, setEras);
   const ratedCount = history.filter((h) => h.rated).length;
-  const position = movie ? (movies.findIndex((m) => m.id === movie.id) + 1) : 0;
+  const position = movie ? movies.findIndex((m) => m.id === movie.id) + 1 : 0;
+
+  const eraLabels = ERAS.filter((e) => eras.includes(e.id)).map((e) => e.label);
+  const summary = [genres.length ? (genres.length <= 2 ? genres.join(' + ') : `${genres.length} categories`) : 'All categories', eraLabels.length ? (eraLabels.length <= 2 ? eraLabels.join(' + ') : `${eraLabels.length} eras`) : 'all years'].join(' · ');
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-4">
+    <>
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={() => setShowOptions((v) => !v)} aria-expanded={showOptions} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${genres.length ? 'border-gold text-gold' : 'border-aisle text-cream'}`}>
-          <SlidersHorizontal size={15} />
-          Top {perYear} of {finished ? '…' : year}{genres.length ? ` · ${genres.length === 1 ? genres[0] : `${genres.length} categories`}` : ''}
-          <ChevronDown size={14} className={`transition-transform ${showOptions ? 'rotate-180' : ''}`} />
+        <button type="button" onClick={() => setShowSetup((v) => !v)} aria-expanded={showSetup} className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold ${genres.length || eras.length ? 'border-gold text-gold' : 'border-aisle text-cream'}`}>
+          <SlidersHorizontal size={15} className="shrink-0" />
+          <span className="truncate">{summary}</span>
+          <ChevronDown size={14} className={`shrink-0 transition-transform ${showSetup ? 'rotate-180' : ''}`} />
         </button>
-        <div className="flex items-center gap-3 text-sm text-dim">
+        <div className="flex shrink-0 items-center gap-3 text-sm text-dim">
           <span><span className="font-bold tabular-nums text-cream">{ratedCount}</span> rated</span>
           <button type="button" onClick={undo} disabled={!history.length} className="inline-flex items-center gap-1 font-bold text-cream disabled:text-aisle"><Undo2 size={15} /> Undo</button>
         </div>
       </div>
 
-      {showOptions && (
+      {showSetup && (
         <div className="flex flex-col gap-3 rounded-xl bg-seat p-3">
-          <div className="flex flex-col gap-1.5">
-            <div className="text-xs font-bold uppercase tracking-widest text-dim">How many from each year</div>
-            <div className="flex gap-2">{PER_YEAR.map((n) => <Chip key={n} on={perYear === n} onClick={() => setPerYear(n)}>Top {n}</Chip>)}</div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <div className="text-xs font-bold uppercase tracking-widest text-dim">Only these categories</div>
-            <div className="flex flex-wrap gap-2">
-              <Chip on={!genres.length} onClick={() => setGenres([])}>Everything</Chip>
-              {GENRE_CHOICES.map((g) => <Chip key={g.id} on={genres.includes(g.name)} onClick={() => toggleGenre(g.name)}>{g.name}</Chip>)}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <div className="text-xs font-bold uppercase tracking-widest text-dim">Jump to</div>
-            <div className="flex flex-wrap gap-2">
-              <Chip on={year === THIS_YEAR} onClick={() => setYear(THIS_YEAR)}>This year</Chip>
-              {DECADES.map((d) => <Chip key={d} on={year <= d + 9 && year >= d && year !== THIS_YEAR} onClick={() => setYear(Math.min(d + 9, THIS_YEAR))}>{d}s</Chip>)}
-            </div>
-            <p className="text-xs text-dim">It works backwards from there, one year at a time, and remembers where you stopped.</p>
-          </div>
+          <Group title="Categories" hint="Pick the ones you've watched a lot of. Any of them counts.">
+            <Chip on={!genres.length} onClick={() => setGenres([])}>All</Chip>
+            {GENRE_CHOICES.map((g) => <Chip key={g.id} on={genres.includes(g.name)} onClick={() => toggleGenre(g.name)}>{g.name}</Chip>)}
+          </Group>
+          <Group title="Eras" hint="Combined with the categories above.">
+            <Chip on={!eras.length} onClick={() => setEras([])}>All years</Chip>
+            {ERAS.map((e) => <Chip key={e.id} on={eras.includes(e.id)} onClick={() => toggleEra(e.id)}>{e.label}</Chip>)}
+          </Group>
+          <Group title="How many from each year">
+            {PER_YEAR.map((n) => <Chip key={n} on={perYear === n} onClick={() => setPerYear(n)}>Top {n}</Chip>)}
+          </Group>
+          <button type="button" onClick={() => { setYear(years[0]); setShowSetup(false); }} className="self-start text-sm text-dim underline">Start over from {years[0]}</button>
         </div>
       )}
 
@@ -111,9 +135,9 @@ export default function Rate({ entries, me, includeR, onRate }) {
 
       {finished && (
         <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <h2 className="text-xl font-bold text-cream">You've gone all the way back to {FIRST_YEAR}</h2>
-          <p className="text-sm text-dim">{hasTmdb ? 'Raise the number per year or add categories to see more.' : 'That is the whole built-in list. Add a TMDB key to get every year in full.'}</p>
-          <button type="button" onClick={() => setYear(THIS_YEAR)} className="rounded-lg bg-velvet px-4 py-2 font-bold text-cream">Start again from {THIS_YEAR}</button>
+          <h2 className="text-xl font-bold text-cream">That's everything in this slice</h2>
+          <p className="text-sm text-dim">{hasTmdb ? 'Add categories or eras, or raise the number per year, to see more.' : 'That is the whole built-in list for these choices.'}</p>
+          <button type="button" onClick={() => setYear(years[0])} className="rounded-lg bg-velvet px-4 py-2 font-bold text-cream">Go through it again</button>
         </div>
       )}
       {!finished && !movie && !error && <p className="py-16 text-center text-sm text-dim">Loading {year}…</p>}
@@ -128,6 +152,7 @@ export default function Rate({ entries, me, includeR, onRate }) {
               <CertBadge cert={movie.cert} />
               <span className="tabular-nums">#{position} of {movies.length} in {year}</span>
             </div>
+            {movie.genres?.length > 0 && <div className="text-xs text-dim">{movie.genres.slice(0, 3).join(' · ')}</div>}
           </div>
 
           <div className="flex w-full flex-col items-center gap-3 rounded-xl bg-seat p-4">
@@ -158,6 +183,16 @@ export default function Rate({ entries, me, includeR, onRate }) {
           <button type="button" onClick={() => advance(false)} className="px-4 py-1 text-sm text-dim underline">Skip for now</button>
         </div>
       )}
+    </>
+  );
+}
+
+function Group({ title, hint, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-xs font-bold uppercase tracking-widest text-dim">{title}</div>
+      <div className="flex flex-wrap gap-2">{children}</div>
+      {hint && <p className="text-xs text-dim">{hint}</p>}
     </div>
   );
 }

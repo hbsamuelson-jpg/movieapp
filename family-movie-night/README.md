@@ -123,8 +123,14 @@ Everyone who opens the site shares one space: the same names, ratings and shortl
 
 ### Tabs
 
-- **Tonight** — pick who's watching, see suggestions ranked for exactly those people, put movies on the shared shortlist with **+**, then choose together or **Spin**.
-- **Rate** — one poster at a time: the top movies of a year, then the year before, and so on back to 1970. Open the bar at the top to change how many per year (5, 10 or 20), narrow to categories you've watched a lot of, or jump to a decade. It skips what you've already rated and remembers where you stopped.
+- **Tonight** — pick who's watching and see suggestions ranked for exactly those people. Two ways to steer it:
+  - **In the mood for:** tap one or more genres. Matching movies get a big boost; nothing is hidden.
+  - **Movies like…:** type one or more reference movies. The list becomes movies similar to them, ranked for the people present, with everyone's vetoes still applied.
+
+  Put movies on the shared shortlist with **+**, then choose together or **Spin**. Filters (MPAA rating, genre, runtime) are behind the Filters button.
+- **Rate** — two modes, switched at the top:
+  - **Quick Swipe:** one poster at a time, the top 5, 10 or 20 movies of each year, newest first. The setup bar combines **categories** and **eras** (Recent, 2020s … 1970s, Before 1970), so you can work through just 1990s sci-fi and comedy, for example. It skips what you've rated and remembers where you stopped.
+  - **Rank 5:** five well-known movies from very different genres and decades. Kick out any you haven't seen (each is swapped for a fresh one), order the rest best to worst with the arrows, and submit. Then **Next batch**.
 - **Search** — find one specific movie.
 - **Mine** — your ratings, plus a summary of your taste by category.
 
@@ -151,9 +157,15 @@ Each present person then contributes a score out of 100: Want to 92, Watch again
 
 People who aren't watching tonight don't count, including their vetoes.
 
+**In the mood for.** Each priority genre a movie matches adds to its score: +15 for the first, +5 for each further one, up to +25. It changes the order, never what's shown.
+
+**Movies like….** For each reference movie the app pulls four lists from TMDB: its recommendations, well-known movies sharing all its genres, well-known movies sharing its lead genre and any of its keywords, and its "similar" list. Each movie gets a similarity from 0 to 1; appearing in several lists, or being similar to several reference movies, raises it, and obscure titles are discounted. The list then shows only those similar movies, scored 65% group score and 35% similarity. Rule 2 above is dropped (nobody needs to have asked for them), rule 1 still applies, and a movie everyone present has already watched is left out.
+
+**Rank 5 → stars.** A submitted ranking is saved as ordinary star ratings: 5, 4.5, 3.5, 3, 2.5 from top to bottom (5, 4, 3.5, 2.5 for four). Last place is 2.5 on purpose, above the 2-star veto line. Tapping **Never again** on a movie saves 1.5 instead, which does rule it out. These feed "Your taste so far" like any other rating and can be edited under Mine.
+
 `npm test` checks these rules.
 
-**"Top of each year"** means the most-rated releases of that year on TMDB, PG-13 and under unless you turn on R-rated movies on the people page (tap the avatars).
+**"Top of each year"** means the most-rated releases of that year on TMDB. Every MPAA rating is included; use the Filters button on Tonight to narrow by rating.
 
 ## Database schema (Firestore)
 
@@ -181,6 +193,7 @@ groups/family/movies/{tmdbId}         ← one document per movie anyone has rate
   ratings: {
     "k3x9q2ab": { status: "again",  stars: 5    },
     "p7m1zz0c": { status: "unseen", stars: null }   // a missing id = hasn't rated it
+    // ratings saved from Rank 5 also carry  via: "rank"
     // status is one of: seen | again | unseen | meh | pass
   }
   updatedAt: timestamp
@@ -198,13 +211,14 @@ src/
     config.js               reads .env, small on-device preferences
     firebase.js             Firebase setup and the silent anonymous session
     store.js                on-device store and shared store, same interface
-    tmdb.js                 top-of-year decks, search, details; falls back to the built-in list
+    tmdb.js                 top-of-year decks, eras, similar movies, varied picks, search, details
     suggest.js              taste profiles and suggestions (pure functions)
     autoUpdate.js           checks for a newer build and reloads into it
     demoData.js             the built-in movie list (no ratings)
   components/
-    Tonight.jsx             who's watching, shortlist, Spin, suggestions
-    Rate.jsx                poster-by-poster rating, year by year
+    Tonight.jsx             who's watching, mood and movies-like steering, shortlist, Spin, suggestions
+    Rate.jsx                mode switch and Quick Swipe (poster by poster, categories + eras)
+    Rank.jsx                Rank 5: kick the unseen, order the rest, submit
     Browse.jsx              search
     Mine.jsx                your ratings and taste summary
     RateSheet.jsx           movie details and rating sheet

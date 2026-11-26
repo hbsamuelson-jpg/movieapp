@@ -4,8 +4,8 @@ import { hasFirebase } from '../lib/config.js';
 import { applyUpdate, buildLabel } from '../lib/autoUpdate.js';
 import { Avatar } from './ui.jsx';
 
-/** Who's in, switching person, and a couple of settings. */
-export default function Group({ members, me, includeR, onIncludeR, onSwitch, onAdd, onRemove }) {
+/** Who's in, and switching person. */
+export default function Group({ members, me, onSwitch, onAdd, onRemove }) {
   const [name, setName] = useState('');
   const [removing, setRemoving] = useState(null);
   const add = (e) => { e.preventDefault(); if (name.trim()) { onAdd(name); setName(''); } };
@@ -38,14 +38,6 @@ export default function Group({ members, me, includeR, onIncludeR, onSwitch, onA
             ? 'Everyone who opens this site sees the same names and ratings. There are no passwords, so anyone with the link can pick any name.'
             : 'Names and ratings are saved on this device only. To share them between phones, the site needs its Firebase keys (README, step 2).'}
         </p>
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-xl bg-seat p-4">
-        <label className="flex items-center justify-between gap-3 text-sm font-bold text-cream">
-          Show R-rated movies when I'm rating
-          <input id="include-r" type="checkbox" className="h-5 w-5 accent-[#F5C518]" checked={includeR} onChange={(e) => onIncludeR(e.target.checked)} />
-        </label>
-        <p className="text-xs text-dim">Off by default. This is a setting for this device only.</p>
       </section>
 
       <p className="text-xs tabular-nums text-dim">Version {buildLabel} · <button type="button" onClick={applyUpdate} className="underline">Check for update</button></p>

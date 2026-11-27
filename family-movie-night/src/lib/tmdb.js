@@ -383,26 +383,58 @@ const percent = (value) => { const n = parseInt(value, 10); return Number.isFini
  * Returns { rt, mc, rtPath, age } or 'missing' (it doesn't know the movie) or null (couldn't ask:
  * no key, the daily limit, or no connection).
  */
+const readMdblist = (data) => {
+  const from = (source) => (data.ratings || []).find((r) => r.source === source);
+  const whole = (r) => (typeof r?.value === 'number' ? Math.round(r.value) : null);
+  const tomatoes = from('tomatoes');
+  return {
+    rt: whole(tomatoes), mc: whole(from('metacritic')),
+    rtPath: typeof tomatoes?.url === 'string' && tomatoes.url.startsWith('/m/') ? tomatoes.url : null,
+    // Only Common Sense Media's own age; MDBList's general age_rating is a guess from the MPAA rating when they haven't reviewed it.
+    age: data.commonsense && Number.isFinite(data.commonsense_media?.common_sense) ? data.commonsense_media.common_sense : null,
+  };
+};
 async function mdblistScores(tmdbId) {
   if (!hasMdblist) return null;
   try {
     const res = await fetch(`https://api.mdblist.com/tmdb/movie/${tmdbId}?apikey=${mdblistKey}`);
     if (res.status === 404) return 'missing';
     if (!res.ok) return null;
-    const data = await res.json();
-    const from = (source) => (data.ratings || []).find((r) => r.source === source);
-    const whole = (r) => (typeof r?.value === 'number' ? Math.round(r.value) : null);
-    const tomatoes = from('tomatoes');
-    return {
-      rt: whole(tomatoes), mc: whole(from('metacritic')),
-      rtPath: typeof tomatoes?.url === 'string' && tomatoes.url.startsWith('/m/') ? tomatoes.url : null,
-      // Only Common Sense Media's own age; MDBList's general age_rating is a guess from the MPAA rating when they haven't reviewed it.
-      age: data.commonsense && Number.isFinite(data.commonsense_media?.common_sense) ? data.commonsense_media.common_sense : null,
-    };
+    return readMdblist(await res.json());
   } catch {
     return null;
   }
 }
+
+/** True for a saved movie whose scores were looked up before MDBList was connected. */
+export const scoresOutdated = (movie) => hasMdblist && movie.scored !== SCORE_VERSION;
+/**
+ * Scores for up to 100 movies in ONE MDBList lookup, through the app's own /api/scores function
+ * (MDBList refuses this kind of request straight from a browser). Returns a Map of TMDB id ->
+ * { rt, rtPath, age } for the movies it knows, or null if it couldn't be asked. Used to bring an
+ * existing library over to Rotten Tomatoes scores quickly.
+ */
+export async function bulkScores(movies) {
+  if (!hasMdblist || !movies.length) return null;
+  try {
+    const res = await fetch('/api/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: movies.slice(0, 100).map((m) => Number(m.id)) }) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data?.scores)) return null;
+    const found = new Map();
+    for (const { id, ...scores } of data.scores) {
+      found.set(String(id), scores);
+      remember(`t${id}`, scores);
+    }
+    return found;
+  } catch {
+    return null;
+  }
+}
+/** A saved movie with the scores from a bulk lookup applied (or marked as looked up, if MDBList doesn't know it). */
+export const withScores = (movie, scores) => ({
+  ...movie, rt: scores ? scores.rt : movie.rt ?? null, rtPath: scores?.rtPath ?? movie.rtPath ?? null, age: scores?.age ?? movie.age ?? null, scored: SCORE_VERSION,
+});
 
 /**
  * Returns { rt, mc, rtPath, age, checked }: each score is 0–100 or null. `checked` is false when

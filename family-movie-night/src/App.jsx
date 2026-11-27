@@ -12,7 +12,7 @@ import { applyUpdate, watchForUpdates } from './lib/autoUpdate.js';
 import { hasFirebase, pref } from './lib/config.js';
 import { signInWithGoogle, signOutGoogle, watchSession } from './lib/firebase.js';
 import { createLocalStore, createSharedStore, newId8, slim } from './lib/store.js';
-import { detailsChanged, enrich, needsDetails, triedRecently } from './lib/tmdb.js';
+import { bulkScores, detailsChanged, enrich, needsDetails, scoresOutdated, triedRecently, withScores } from './lib/tmdb.js';
 import { unscoredNights } from './lib/stats.js';
 import { genreRankToStars, setStatedGenres } from './lib/suggest.js';
 
@@ -44,6 +44,35 @@ export default function App() {
   useEffect(() => (hasFirebase ? watchSession(setSession, (e) => setProblem(explain(e))) : undefined), []);
   useEffect(() => (ready ? store.subscribe(setData, (e) => setProblem(explain(e))) : undefined), [ready]);
 
+  // Rotten Tomatoes catch-up: movies saved before MDBList was connected get their scores in bulk,
+  // 50 per request (each request is one lookup against the daily limit), in a different order on
+  // each phone. A movie another phone has already updated is skipped, so it is written only once.
+  const latest = useRef({});
+  latest.current = data?.entries || {};
+  const outdated = data ? Object.values(data.entries).filter((e) => scoresOutdated(e.movie)).length : 0;
+  const [gaveUp, setGaveUp] = useState(false); // the daily limit or no connection: try again next visit
+  const catching = useRef(false);
+  const caughtUp = outdated === 0 || gaveUp;
+  useEffect(() => {
+    if (!outdated || gaveUp || catching.current) return;
+    catching.current = true;
+    (async () => {
+      const done = new Set(); // handled in this run, even if the saved copy hasn't come back yet
+      for (;;) {
+        const chunk = Object.values(latest.current).map((e) => e.movie).filter((m) => scoresOutdated(m) && !done.has(String(m.id))).sort(() => Math.random() - 0.5).slice(0, 50);
+        if (!chunk.length) break;
+        const found = await bulkScores(chunk); // eslint-disable-line no-await-in-loop
+        if (!found) { setGaveUp(true); break; }
+        for (const m of chunk) {
+          done.add(String(m.id));
+          const now = latest.current[m.id]?.movie;
+          if (!now || !scoresOutdated(now)) continue; // another phone got there first
+          await Promise.resolve(store.updateMovie(withScores(now, found.get(String(m.id))))).catch(() => {}); // eslint-disable-line no-await-in-loop
+        }
+      }
+    })().finally(() => { catching.current = false; });
+  }, [outdated > 0, gaveUp]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Movies with missing or out-of-date details (credits, review score, where to watch): fill those
   // in quietly, a few at a time. This is the one background job that writes to the shared
   // database, and every write is re-read by every open phone, so it is careful: each movie is
@@ -52,7 +81,7 @@ export default function App() {
   const backfilled = useRef(new Set());
   const [backfillTick, setBackfillTick] = useState(0);
   useEffect(() => {
-    if (!data) return undefined;
+    if (!data || !caughtUp) return undefined; // scores first, in bulk; then anything else, one at a time
     const missing = Object.values(data.entries)
       .filter((e) => needsDetails(e.movie) && !triedRecently(e.movie) && !backfilled.current.has(String(e.movie.id)))
       .sort(() => Math.random() - 0.5) // each phone starts somewhere different, so they don't duplicate lookups
@@ -63,7 +92,7 @@ export default function App() {
     Promise.all(missing.map((e) => enrich(e.movie).then((full) => full !== e.movie && full.detailed && detailsChanged(e.movie, full) && store.updateMovie(full))))
       .finally(() => setTimeout(() => live && setBackfillTick((t) => t + 1), 2500)); // then the next few
     return () => { live = false; };
-  }, [data ? Object.keys(data.entries).length : -1, backfillTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data ? Object.keys(data.entries).length : -1, backfillTick, caughtUp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = (id) => { setPicked(id); pref.set('me', id); setShowGroup(false); };
   const googleUid = session && !session.isAnonymous ? session.uid : null;

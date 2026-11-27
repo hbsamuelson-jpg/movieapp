@@ -264,7 +264,7 @@ export async function searchMovies(query) {
 
 /** Fill in runtime, MPAA rating and full genres. Returns the movie unchanged in demo mode or on failure. */
 /** True when a movie is missing details the app can still fetch (rating, runtime, crew, critic score). */
-export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!(hasOmdb || hasMdblist) || movie.scored === SCORE_VERSION) && watchFresh(movie));
+export const needsDetails = (movie) => hasTmdb && !(movie.detailed && movie.crew && (!(hasOmdb || hasMdblist) || (movie.scored === SCORE_VERSION && !rtGap(movie))) && watchFresh(movie));
 
 /* ---------- Where to watch ---------- */
 // TMDB relays JustWatch's list of which US services carry each movie. The same service shows up
@@ -342,13 +342,13 @@ export async function enrich(movie) {
     const cert = us?.release_dates?.map((d) => d.certification).find(Boolean) || null;
     // A score already saved with the movie is kept, so refreshing where-to-watch costs no lookups.
     noteLookedUp(movie.id);
-    const critics = movie.scored === SCORE_VERSION ? { rt: movie.rt ?? null, mc: movie.mc ?? null, rtPath: movie.rtPath ?? null, age: movie.age ?? null, checked: true } : await criticScores(movie.id, raw.imdb_id);
+    const critics = movie.scored === SCORE_VERSION && !rtGap(movie) ? { rt: movie.rt ?? null, mc: movie.mc ?? null, rtPath: movie.rtPath ?? null, age: movie.age ?? null, rtChecked: movie.rtChecked ?? false, checked: true } : await criticScores(movie.id, raw.imdb_id);
     return {
       ...normalize(raw), cert, runtime: raw.runtime || null, crew: keyCrew(raw.credits?.crew || []),
       imdb: raw.imdb_id || null,
       // A lookup that couldn't be made (daily limit, no connection) never wipes a score already saved.
       rt: critics.rt ?? (critics.checked ? null : movie.rt ?? null), mc: critics.mc ?? (critics.checked ? null : movie.mc ?? null),
-      rtPath: critics.rtPath ?? movie.rtPath ?? null, age: critics.age ?? movie.age ?? null, scored: critics.checked ? SCORE_VERSION : false, detailed: true,
+      rtPath: critics.rtPath ?? movie.rtPath ?? null, age: critics.age ?? movie.age ?? null, rtChecked: Boolean(critics.rtChecked ?? movie.rtChecked), scored: critics.checked ? SCORE_VERSION : false, detailed: true,
       watch: whereToWatch(raw['watch/providers']?.results), trailer: trailerKey(raw.videos?.results),
     };
   } catch {
@@ -437,21 +437,46 @@ export const withScores = (movie, scores) => ({
 });
 
 /**
- * Returns { rt, mc, rtPath, age, checked }: each score is 0–100 or null. `checked` is false when
- * the lookup should be tried again later. MDBList is asked first; OMDb fills in when MDBList
- * can't be asked or doesn't know the movie.
+ * MDBList has no Rotten Tomatoes score for a few well-known movies; OMDb sometimes does. A movie
+ * is a "gap" until OMDb has been asked about it too.
+ */
+const rtGap = (movie) => hasOmdb && hasMdblist && movie.rt == null && !movie.rtChecked;
+
+/**
+ * Returns { rt, mc, rtPath, age, rtChecked, checked }: each score is 0–100 or null. `checked` is
+ * false when the whole lookup should be tried again later. MDBList is asked first; OMDb is asked
+ * when MDBList can't be reached, doesn't know the movie, or has no Rotten Tomatoes score for it
+ * (`rtChecked` records that OMDb has had its say).
  */
 async function criticScores(tmdbId, imdbId) {
   const cache = scoreStore();
-  const key = hasMdblist ? `t${tmdbId}` : imdbId;
-  if (key && cache[key]) return { ...cache[key], checked: true };
-  const first = await mdblistScores(tmdbId);
-  if (first && first !== 'missing') { remember(key, first); return { ...first, checked: true }; }
-  const second = await omdbScores(imdbId);
-  // With an MDBList key, only its answer (or its "don't know this one") settles the matter.
-  const settled = hasMdblist ? first === 'missing' : second.checked;
-  if (settled && key) remember(key, { rt: second.rt, mc: second.mc });
-  return { rt: second.rt, mc: second.mc, rtPath: null, age: null, checked: settled };
+  if (!hasMdblist) {
+    if (imdbId && cache[imdbId]) return { ...cache[imdbId], rtPath: null, age: null, checked: true };
+    const only = await omdbScores(imdbId);
+    if (only.checked && imdbId) remember(imdbId, { rt: only.rt, mc: only.mc });
+    return { rt: only.rt, mc: only.mc, rtPath: null, age: null, checked: only.checked };
+  }
+  const key = `t${tmdbId}`;
+  let known = cache[key] || null;
+  if (known && (known.rt != null || known.rtChecked || !hasOmdb)) return { ...known, checked: true };
+  if (!known) {
+    const first = await mdblistScores(tmdbId);
+    if (first === 'missing') known = { rt: null, rtPath: null, age: null };
+    else if (first) known = { rt: first.rt, rtPath: first.rtPath, age: first.age };
+  }
+  if (!known) { // MDBList couldn't be asked: show what OMDb has for now, and try again later
+    const meanwhile = await omdbScores(imdbId);
+    return { rt: meanwhile.rt, mc: null, rtPath: null, age: null, checked: false };
+  }
+  if (known.rt == null && hasOmdb) {
+    const second = await omdbScores(imdbId);
+    if (!second.checked) return { ...known, rtChecked: false, checked: true }; // OMDb's turn comes later
+    known = { ...known, rt: second.rt, rtChecked: true };
+  } else {
+    known = { ...known, rtChecked: true };
+  }
+  remember(key, known);
+  return { ...known, checked: true };
 }
 
 async function omdbScores(imdbId) {

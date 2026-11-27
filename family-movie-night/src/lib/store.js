@@ -14,6 +14,8 @@
 //   clearVote()                            remove it
 //   addHistory(entry) / removeHistory(id)  the log of movies watched together
 //   snooze(memberId, movieId, until | null)  hide a movie from that person's suggestions until a date
+//   saveMarathon(marathon) / removeMarathon(id)   a series or director laid out over several nights
+//   addMember(name, uid, { guest: true, until })  a guest for one night: removed automatically after `until`
 //
 // A vote is stored as { id, open, ranked, options: [movie], voters: [id], voted: [id], tally: { movieId: n } }.
 // In a ranked vote each person orders up to three movies, worth 3, 2 and 1 points.
@@ -35,10 +37,10 @@ export const newId8 = () => newId();
 export const slim = (m) => ({ id: m.id, title: m.title, year: m.year || null, poster: m.poster || null });
 const newVote = (movies, voters) => ({ id: newId(), open: true, ranked: movies.length >= 3, options: movies.map(slim), voters, voted: [], tally: {} });
 export function createLocalStore() {
-  let state = { members: [], entries: {}, shortlist: [], vote: null, history: [], services: [] };
+  let state = { members: [], entries: {}, shortlist: [], vote: null, history: [], services: [], marathons: [] };
   try {
     const saved = JSON.parse(localStorage.getItem(LOCAL_KEY));
-    if (saved?.members) state = { members: saved.members, entries: saved.entries || {}, shortlist: saved.shortlist || [], vote: saved.vote || null, history: saved.history || [], services: saved.services || [] };
+    if (saved?.members) state = { members: saved.members, entries: saved.entries || {}, shortlist: saved.shortlist || [], vote: saved.vote || null, history: saved.history || [], services: saved.services || [], marathons: saved.marathons || [] };
   } catch { /* start empty */ }
   const listeners = new Set();
   const commit = (next) => {
@@ -54,10 +56,10 @@ export function createLocalStore() {
       cb(state);
       return () => listeners.delete(cb);
     },
-    addMember(name) {
+    addMember(name, uid = null, extra = {}) {
       const existing = state.members.find((m) => sameName(m.name, name));
       if (existing) return existing.id;
-      const member = { id: newId(), name: name.trim() };
+      const member = { id: newId(), name: name.trim(), ...extra };
       commit({ ...state, members: [...state.members, member].sort(byName) });
       return member.id;
     },
@@ -112,6 +114,12 @@ export function createLocalStore() {
     removeHistory(id) {
       commit({ ...state, history: state.history.filter((h) => h.id !== id) });
     },
+    saveMarathon(marathon) {
+      commit({ ...state, marathons: [...(state.marathons || []).filter((x) => x.id !== marathon.id), marathon] });
+    },
+    removeMarathon(id) {
+      commit({ ...state, marathons: (state.marathons || []).filter((x) => x.id !== id) });
+    },
     snooze(memberId, movieId, until) {
       commit({ ...state, members: state.members.map((m) => {
         if (m.id !== memberId) return m;
@@ -134,6 +142,7 @@ export function createSharedStore(spaceId = defaultSpace) {
   const movies = collection(space, 'movies');
   let members = [];
   let history = [];
+  let marathons = [];
   let currentVote = null;
 
   return {
@@ -144,10 +153,11 @@ export function createSharedStore(spaceId = defaultSpace) {
       const emit = () => head && entries && cb({ ...head, entries });
       const stopSpace = onSnapshot(space, (snap) => {
         const data = snap.data() || {}; // no document yet: nobody has added a name
-        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null, favorites: m.favorites || [], snoozed: m.snoozed || {}, genreRank: m.genreRank || null })).sort(byName);
+        members = Object.entries(data.members || {}).map(([id, m]) => ({ id, name: m.name || 'Someone', uid: m.uid || null, favorites: m.favorites || [], snoozed: m.snoozed || {}, genreRank: m.genreRank || null, guest: Boolean(m.guest), until: m.until || null })).sort(byName);
         history = data.history || [];
         currentVote = data.vote || null;
-        head = { members, shortlist: data.shortlist || [], vote: currentVote, history, services: data.services || [] };
+        marathons = data.marathons || [];
+        head = { members, shortlist: data.shortlist || [], vote: currentVote, history, services: data.services || [], marathons };
         emit();
       }, onError);
 
@@ -196,7 +206,7 @@ export function createSharedStore(spaceId = defaultSpace) {
       else listenToAll();
       return () => { stopped = true; stopSpace(); stopMovies(); };
     },
-    addMember(name, uid = null) {
+    addMember(name, uid = null, extra = {}) {
       // A name that already exists is reused only if nobody has linked it to a Google account.
       const existing = members.find((m) => sameName(m.name, name) && !m.uid);
       if (existing) {
@@ -204,7 +214,7 @@ export function createSharedStore(spaceId = defaultSpace) {
         return existing.id;
       }
       const id = newId();
-      setDoc(space, { members: { [id]: { name: name.trim(), joinedAt: serverTimestamp(), ...(uid ? { uid } : {}) } } }, { merge: true });
+      setDoc(space, { members: { [id]: { name: name.trim(), joinedAt: serverTimestamp(), ...(uid ? { uid } : {}), ...extra } } }, { merge: true });
       return id;
     },
     /** Ratings are stored under the member id, so linking moves nothing: the name just gains an owner. */
@@ -257,6 +267,12 @@ export function createSharedStore(spaceId = defaultSpace) {
     },
     removeHistory(id) {
       return updateDoc(space, { history: history.filter((h) => h.id !== id) });
+    },
+    saveMarathon(marathon) {
+      return setDoc(space, { marathons: [...marathons.filter((x) => x.id !== marathon.id), marathon] }, { mergeFields: ['marathons'] });
+    },
+    removeMarathon(id) {
+      return updateDoc(space, { marathons: marathons.filter((x) => x.id !== id) });
     },
     snooze(memberId, movieId, until) {
       return updateDoc(space, { [`members.${memberId}.snoozed.${movieId}`]: until || deleteField() });

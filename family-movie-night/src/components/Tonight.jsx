@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Check, ChevronDown, Dices, History as HistoryIcon, Plus, SlidersHorizontal, Star, Vote as VoteIcon, X } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, Dices, History as HistoryIcon, ListVideo, Plus, SlidersHorizontal, Star, Vote as VoteIcon, X } from 'lucide-react';
 import { CERTS, hasTmdb, pref } from '../lib/config.js';
 import { unscoredNights } from '../lib/stats.js';
 import { activeSnoozes, applyFilters, mergeSimilar, suggest } from '../lib/suggest.js';
 import { discover, interestSeeds } from '../lib/discover.js';
 import { enrich, GENRE_CHOICES, similarTo } from '../lib/tmdb.js';
 import History from './History.jsx';
+import Marathons from './Marathons.jsx';
 import Stats from './Stats.jsx';
 import MoviePicker from './MoviePicker.jsx';
 import Vote from './Vote.jsx';
@@ -14,12 +15,13 @@ import { Avatar, CertBadge, Chip, formatRuntime, MemberDots, MovieRow, Notice, P
 const RUNTIMES = [[0, 'Any length'], [90, '90 min'], [120, '2 hours'], [150, '2½ hours']];
 
 /** Who's here, what the app suggests for them, and the shortlist you put up for a choice or a spin. */
-export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, history, onSnooze, onWatch, onRemoveHistory, onOpen, onRate }) {
+export default function Tonight({ entries, members, me, away, onToggleAway, shortlist, onShortlist, vote, voting, history, marathons = [], onSaveMarathon, onRemoveMarathon, onSnooze, onWatch, onRemoveHistory, onOpen, onRate }) {
   const [filters, setFilters] = useState({ genre: '', certs: [], maxRuntime: 0 });
   const [showFilters, setShowFilters] = useState(false);
   const [spinning, setSpinning] = useState(null); // { pool, via } being spun, or null
   const [showHistory, setShowHistory] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showMarathons, setShowMarathons] = useState(false);
   const [stream, setStream] = useState('any'); // any | stream (no rental needed) | free (free with ads)
   const [showSnoozed, setShowSnoozed] = useState(false);
   const [skipped, setSkipped] = useState(() => pref.get('score-skipped', [])); // score prompts dismissed on this device
@@ -107,7 +109,8 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
     );
   };
 
-  if (showStats) return <Stats entries={entries} members={members} history={history} me={me} onBack={() => setShowStats(false)} onOpen={onOpen} />;
+  if (showMarathons) return <Marathons marathons={marathons} history={history} shortlist={shortlist} onSave={onSaveMarathon} onRemove={onRemoveMarathon} onShortlist={onShortlist} onOpen={onOpen} onBack={() => setShowMarathons(false)} />;
+  if (showStats) return <Stats entries={entries} members={members.filter((m) => !m.guest)} history={history} me={me} onBack={() => setShowStats(false)} onOpen={onOpen} />;
   if (showHistory) return <History history={history} entries={entries} members={members} me={me} onBack={() => setShowHistory(false)} onOpen={onOpen} onRemove={onRemoveHistory} />;
 
   const spinPool = shortlist.length >= 2 ? shortlist : shown.slice(0, 8).map((e) => e.movie);
@@ -117,6 +120,9 @@ export default function Tonight({ entries, members, me, away, onToggleAway, shor
       <div className="-mb-2 flex items-center justify-between gap-3">
         <h2 className="text-2xl font-bold text-cream">Tonight</h2>
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setShowMarathons(true)} className="inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream hover:border-dim">
+            <ListVideo size={15} /> Marathons{marathons.length ? ` ${marathons.length}` : ''}
+          </button>
           <button type="button" onClick={() => setShowStats(true)} className="inline-flex items-center gap-1.5 rounded-full border border-aisle px-3 py-1.5 text-sm font-bold text-cream hover:border-dim">
             <BarChart3 size={15} /> Stats
           </button>

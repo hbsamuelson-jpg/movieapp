@@ -5,11 +5,13 @@ import { applyUpdate, buildLabel } from '../lib/autoUpdate.js';
 import { Avatar, Notice } from './ui.jsx';
 
 /** Who's in, and switching person. */
-export default function Group({ members, me, canGoogle, googleUid, error, onSwitch, onAdd, onRemove, onLink, onUnlink, onSignOut }) {
+export default function Group({ members, me, canGoogle, googleUid, error, onSwitch, onAdd, onAddGuest, onRemove, onLink, onUnlink, onSignOut }) {
   const [name, setName] = useState('');
   const [removing, setRemoving] = useState(null);
   const [big, setBig] = useState(() => pref.get('big-text', false));
   const toggleBig = () => { const next = !big; setBig(next); pref.set('big-text', next); document.documentElement.classList.toggle('big-text', next); };
+  const [guest, setGuest] = useState('');
+  const addGuest = (e) => { e.preventDefault(); if (guest.trim()) { onAddGuest(guest); setGuest(''); } };
   const add = (e) => { e.preventDefault(); if (name.trim()) { onAdd(name); setName(''); } };
 
   return (
@@ -23,7 +25,7 @@ export default function Group({ members, me, canGoogle, googleUid, error, onSwit
           {members.map((m) => (
             <li key={m.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
               <Avatar member={m} size={36} />
-              <span className="min-w-0 flex-1 truncate font-bold text-cream">{m.name}</span>
+              <span className="min-w-0 flex-1 truncate font-bold text-cream">{m.name}{m.guest && <span className="ml-2 rounded-full border border-aisle px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-dim">Guest</span>}</span>
               {m.id === me ? <span className="text-xs text-gold">that's you</span>
                 : m.uid ? <span className="text-xs text-dim">Google account</span>
                 : removing === m.id
@@ -36,6 +38,13 @@ export default function Group({ members, me, canGoogle, googleUid, error, onSwit
           <input id="add-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={20} placeholder="Add another name" aria-label="Add another name" autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-aisle bg-seat px-3 py-2.5 text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
           <button type="submit" disabled={!name.trim()} className="rounded-lg bg-velvet px-4 py-2.5 font-bold text-cream disabled:bg-aisle disabled:text-dim">Add</button>
         </form>
+        {onAddGuest && (
+          <form onSubmit={addGuest} className="flex gap-2">
+            <input id="add-guest" value={guest} onChange={(e) => setGuest(e.target.value)} maxLength={20} placeholder="Add a guest for tonight" aria-label="Add a guest for tonight" autoComplete="off" className="min-w-0 flex-1 rounded-lg border border-aisle bg-seat px-3 py-2.5 text-cream placeholder:text-dim focus:border-gold focus:outline-none" />
+            <button type="submit" disabled={!guest.trim()} className="rounded-lg border border-aisle px-4 py-2.5 font-bold text-cream disabled:text-dim">Add guest</button>
+          </form>
+        )}
+        <p className="text-xs text-dim">A guest counts in tonight's suggestions and votes, can rate from their own phone, and is removed automatically after 24 hours. Guests are left out of the family stats.</p>
         <p className="text-xs text-dim">
           {hasFirebase
             ? 'Everyone who opens this site sees the same names and ratings. A name linked to a Google account can only be used by signing in; any other name can be picked by anyone with the link.'

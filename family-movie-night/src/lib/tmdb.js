@@ -88,6 +88,21 @@ export async function topOfYear({ year, perYear = 10, genres = [] }) {
   return data.results.slice(0, perYear).map(normalize);
 }
 
+/* ---------- Marathons: movie series ---------- */
+/** Movie series ("collections") matching a name: [{ id, name, poster }]. */
+export async function searchSeries(query) {
+  if (!hasTmdb || !query.trim()) return [];
+  const data = await get('/search/collection', { query: query.trim(), language: 'en-US', page: '1' });
+  return (data.results || []).slice(0, 8).map((c) => ({ id: c.id, name: c.name, poster: c.poster_path || null }));
+}
+/** A series' released movies in release order, with runtimes filled in. */
+export async function seriesMovies(id) {
+  const data = await get(`/collection/${id}`, { language: 'en-US' });
+  const today = new Date().toISOString().slice(0, 10);
+  const parts = (data.parts || []).filter((m) => m.release_date && m.release_date <= today).sort((a, b) => a.release_date.localeCompare(b.release_date)).map(normalize);
+  return Promise.all(parts.map((m) => enrich(m)));
+}
+
 /**
  * The best-regarded movies of all time, overall or in one genre: the highest TMDB audience
  * scores among movies with a lot of votes (so obscure titles with a handful of perfect scores

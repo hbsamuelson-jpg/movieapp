@@ -4,6 +4,7 @@
 //   watched:      'seen'   (stars required)   'again' (stars required, would rewatch)
 //   not watched:  'unseen' (want to)          'meh'   (don't care)         'pass' (no thanks)
 //                 'notseen' (haven't seen it, no opinion given: remembered so it isn't asked again in Rank 5)
+// A want can also carry `elo` and `duels`: its head-to-head points and how many match-ups it has had.
 //   from Rank 5:  { status: 'seen', stars: null, like, via: 'rank', place, of }
 //                 `like` is a hidden 0–5 taste signal. It is never shown as a star rating.
 //   a favourite:  { status: 'seen', stars: null, like: 5, via: 'favorite' }  (counts double)
@@ -138,12 +139,28 @@ export const qualityNudge = (movie) => {
 /** Points taken off a movie for each person watching who has seen it and didn't mark Watch again. */
 const ALREADY_SEEN_PENALTY = 30;
 
+/* ---------- Head-to-head: how much someone wants each movie on their Want to list ---------- */
+// Every wanted movie starts at 1000 points. Each head-to-head pick moves points from the loser to
+// the winner (the standard Elo method: beating a movie you rank far above moves little, an upset
+// moves a lot). On Tonight, a want is worth 92 plus or minus up to 5 depending on those points.
+export const DUEL_START = 1000;
+const DUEL_K = 32;
+export const duelPoints = (rating) => (typeof rating?.elo === 'number' ? rating.elo : DUEL_START);
+/** New points for [winner, loser]. */
+export function duel(winner, loser) {
+  const expected = 1 / (1 + 10 ** ((loser - winner) / 400));
+  const shift = Math.round(DUEL_K * (1 - expected));
+  return [winner + shift, loser - shift];
+}
+/** -5 to +5 on a want, from head-to-head points (200 points from the start is the full amount). */
+export const wantPull = (rating) => Math.max(-5, Math.min(5, ((duelPoints(rating) - DUEL_START) / 200) * 5));
+
 /** One person's enthusiasm for one movie, 0–100, or a veto. */
 function memberScore(rating, profile, movie) {
   // "Haven't seen it" says nothing about wanting it, so it's scored like no answer at all.
   if (!rating || rating.status === 'notseen') return { kind: 'guess', score: predictStars(profile, movie) * 20 * 0.85 };
   if (rating.status === 'pass') return { kind: 'veto' };
-  if (rating.status === 'unseen') return { kind: 'want', score: 92 };
+  if (rating.status === 'unseen') return { kind: 'want', score: 92 + wantPull(rating) };
   if (rating.status === 'meh') return { kind: 'meh', score: 55 };
   const liked = liking(rating);
   if (liked == null) return { kind: 'seen', score: 35 }; // watched, no opinion recorded

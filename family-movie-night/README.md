@@ -273,6 +273,14 @@ People who aren't watching tonight don't count, including their vetoes.
 
 **"Top of each year"** means the most-rated releases of that year on TMDB. Every MPAA rating is included; use the Filters button on Tonight to narrow by rating.
 
+## Head-to-head, awards, marathons, guests and the weekly digest
+
+- **Head-to-head** (Rate tab, third mode). Two movies from your Want to list; tap the one you'd rather watch (or ← / →, ↓ to skip). Each pick moves points from the loser to the winner (`duel` in `src/lib/suggest.js`, saved as `elo` and `duels` on your rating). On Tonight, a want you keep choosing scores up to 5 points higher than a plain want, and one you keep passing over up to 5 lower.
+- **Family awards** (Tonight → Stats). Worked out from ratings by `familyAwards` in `src/lib/stats.js`: Seen it all, Longest watchlist, Rewatcher, Hardest to please, Versus the critics, Thinks like a critic, Perfect harmony, Our hidden gem, Most overrated. An award only appears once there is enough data for it.
+- **Marathons** (Tonight → Marathons). Search for a series, or a director (their eight best-known movies, oldest first), choose the time you have per night, and the app lays the movies out over nights. Tick movies off, or log them as a movie night and they tick themselves. "Add to shortlist" puts the next night's movies on tonight's shortlist. Saved in the family document as `marathons: [{ id, title, kind, perNight, movies, done }]`.
+- **Guests** (tap the faces, top right → "Add a guest for tonight"). A guest counts in suggestions and votes and can rate from their own phone by picking their name. They are removed automatically after 24 hours and never appear in stats or awards. Stored as a normal member with `guest: true` and `until`.
+- **Weekly digest** (`api/digest.js`, text built by `src/lib/digest.js`). `GET /api/digest` returns `{ subject, text, html }`: the top three picks for the whole family, wanted movies that are streaming now, wanted movies released in the last week or the next two, marathons in progress, and who still owes a star rating. `?format=text` returns plain text. It reads every movie once per call, so call it weekly, not per page view. Set `DIGEST_KEY` in Vercel to require `?key=...`. Something outside the app has to call it and send the email (a scheduled task, or any automation tool).
+
 ## Database schema (Firestore)
 
 ```

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronLeft, ChevronRight, Star } from 'lucide-react';
-import { familyStats, firstMonth, monthReview } from '../lib/stats.js';
+import { familyAwards, familyStats, firstMonth, monthReview } from '../lib/stats.js';
 import { Avatar, Poster } from './ui.jsx';
 
 const stars = (n) => (Math.round(n * 10) / 10).toFixed(1).replace('.0', '');
@@ -25,6 +25,7 @@ const Film = ({ movie, onOpen, children }) => (
 export default function Stats({ entries, members, history, me, onBack, onOpen }) {
   const s = useMemo(() => familyStats(entries, members, history), [entries, members, history]);
   const name = (m) => (m.id === me ? 'You' : m.name);
+  const awards = useMemo(() => familyAwards(entries, members), [entries, members]);
   // Month in review: starts on the current month; the arrows step back as far as the first movie night.
   const now = new Date();
   const [when, setWhen] = useState({ year: now.getFullYear(), month: now.getMonth() });
@@ -122,6 +123,25 @@ export default function Stats({ entries, members, history, me, onBack, onOpen })
       {s.loved.length > 0 && (
         <Card title="Family favourites">
           {s.loved.map((x) => <Film key={x.movie.id} movie={x.movie} onOpen={onOpen}><Score value={x.average} /><span>from {x.scores.length} of you</span></Film>)}
+        </Card>
+      )}
+
+      {awards.length > 0 && (
+        <Card title="Family awards">
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {awards.map((a) => (
+              <li key={a.key} className="flex items-center gap-3 rounded-lg bg-house p-3">
+                {a.winner
+                  ? <Avatar member={a.winner} size={38} />
+                  : <button type="button" onClick={() => onOpen(a.movie)} aria-label={a.movie.title} className="w-10 shrink-0"><Poster movie={a.movie} size="w92" className="rounded-sm" /></button>}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-bold uppercase tracking-widest text-gold">{a.title}</span>
+                  <span className="block truncate font-bold text-cream">{a.winner ? name(a.winner) : a.movie.title}</span>
+                  <span className="block text-sm text-dim">{a.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

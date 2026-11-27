@@ -101,6 +101,9 @@ export default function App() {
   // Signed in with Google: you are the name linked to that account. Otherwise: the name picked
   // on this device, unless someone has since linked it to a Google account.
   const me = googleUid ? linked?.id || null : members.find((m) => m.id === picked && !m.uid)?.id || null;
+  // Guests are for one night: once their time is up, whichever device notices removes them.
+  const expired = members.filter((m) => m.guest && m.until && m.until < Date.now()).map((m) => m.id).join();
+  useEffect(() => { if (expired && store) expired.split(',').forEach((id) => store.removeMember(id)); }, [expired]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Link my Google account" was tapped from inside a name: finish the link once signed in.
   useEffect(() => {
@@ -133,6 +136,7 @@ export default function App() {
   if (!data) return <Shell><Centered>Loading…</Centered></Shell>;
 
   const { entries, shortlist, vote, history } = data;
+  const marathons = data.marathons || [];
   const myself = members.find((m) => m.id === me);
   // Genres people rated directly feed every taste profile; set before anything below renders.
   setStatedGenres(Object.fromEntries(members.map((m) => [m.id, genreRankToStars(m.genreRank)])));
@@ -231,12 +235,12 @@ export default function App() {
         <Group
           members={members} me={me}
           canGoogle={hasFirebase} googleUid={googleUid} error={signInError}
-          onSwitch={() => choose(null)} onAdd={(name) => store.addMember(name)} onRemove={(id) => store.removeMember(id)}
+          onSwitch={() => choose(null)} onAdd={(name) => store.addMember(name)} onAddGuest={(name) => store.addMember(name, null, { guest: true, until: Date.now() + 24 * 3600 * 1000 })} onRemove={(id) => store.removeMember(id)}
           onLink={() => google(me)} onUnlink={() => { store.linkMember(me, null); choose(me); signOutGoogle(); }} onSignOut={signOut}
         />
       ) : (
         <>
-          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} onSnooze={(memberId, movie, until) => store.snooze(memberId, String(movie.id), until)} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
+          {tab === 'tonight' && <Tonight entries={entries} members={members} me={me} away={away} onToggleAway={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} vote={vote} voting={voting} history={history} marathons={marathons} onSaveMarathon={(m) => store.saveMarathon(m)} onRemoveMarathon={(id) => store.removeMarathon(id)} onSnooze={(memberId, movie, until) => store.snooze(memberId, String(movie.id), until)} onWatch={logWatched} onRemoveHistory={(id) => store.removeHistory(id)} onOpen={setOpen} onRate={() => go('rate')} />}
           {tab === 'rate' && <Rate key={me} entries={entries} me={me} onRate={rate} />}
           {tab === 'ask' && <Ask entries={entries} members={members} me={me} present={present} onTogglePresent={toggleAway} shortlist={shortlist} onShortlist={(list) => store.setShortlist(list)} onOpen={setOpen} />}
           {tab === 'search' && <Browse entries={entries} members={members} me={me} onWant={(m, on) => rate(m, on ? { status: 'unseen', stars: null } : null)} onOpen={setOpen} />}
@@ -288,7 +292,7 @@ function WhoAreYou({ members, googleUid, canGoogle, error, onGoogle, onSignOut, 
             <li key={m.id}>
               <button type="button" onClick={() => onPick(m.id)} className="flex w-full items-center gap-3 rounded-xl bg-seat px-3 py-3 text-left text-lg font-bold text-cream transition hover:bg-aisle">
                 <Avatar member={m} size={40} />
-                <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                <span className="min-w-0 flex-1 truncate">{m.name}{m.guest && <span className="ml-2 text-xs font-normal text-dim">guest tonight</span>}</span>
                 {claiming && <span className="text-xs font-normal text-gold">That's me</span>}
               </button>
             </li>

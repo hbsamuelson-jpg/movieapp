@@ -3,6 +3,7 @@ import { ChevronDown, SlidersHorizontal, Sparkles, Trophy, Undo2, X } from 'luci
 import { askForDeck } from '../lib/assistant.js';
 import { hasTmdb, pref } from '../lib/config.js';
 import { allTimeBest, enrich, ERAS, GENRE_CHOICES, topOfYear, trailerUrl, yearsFor } from '../lib/tmdb.js';
+import Duel from './Duel.jsx';
 import Rank from './Rank.jsx';
 import { CertBadge, Chip, directedBy, NOT_WATCHED, Notice, Poster, ScoreBadge, StarRating, STATUS, TitleLink, KeyHint, MovieLinks, useStarKeys } from './ui.jsx';
 
@@ -10,7 +11,7 @@ const PER_YEAR = [5, 10, 20];
 // Arrow keys for the three "haven't watched it" answers, laid out like the buttons: left, middle, right.
 const ARROWS = { ArrowLeft: 'unseen', ArrowDown: 'meh', ArrowRight: 'pass' };
 const ARROW_GLYPH = { unseen: '←', meh: '↓', pass: '→' };
-const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank']];
+const MODES = [['swipe', 'Quick Swipe'], ['rank', 'Rank'], ['duel', 'Head-to-head']];
 
 /** Two ways to teach the app your taste: one poster at a time, or ranking a varied batch of five. */
 export default function Rate({ entries, me, onRate }) {
@@ -18,12 +19,12 @@ export default function Rate({ entries, me, onRate }) {
   const choose = (m) => { setMode(m); pref.set('rate-mode', m); };
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4 lg:max-w-6xl">
-      <div className="grid grid-cols-2 gap-1 rounded-full bg-seat p-1 lg:w-[26rem] lg:self-center" role="tablist" aria-label="Rating mode">
+      <div className="grid grid-cols-3 gap-1 rounded-full bg-seat p-1 lg:w-[34rem] lg:self-center" role="tablist" aria-label="Rating mode">
         {MODES.map(([id, label]) => (
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => choose(id)} className={`rounded-full py-2 text-sm font-bold transition ${mode === id ? 'bg-gold text-house' : 'text-dim hover:text-cream'}`}>{label}</button>
         ))}
       </div>
-      {mode === 'swipe' ? <QuickSwipe entries={entries} me={me} onRate={onRate} /> : <Rank entries={entries} me={me} onRate={onRate} />}
+      {mode === 'swipe' ? <QuickSwipe entries={entries} me={me} onRate={onRate} /> : mode === 'duel' ? <Duel entries={entries} me={me} onRate={onRate} /> : <Rank entries={entries} me={me} onRate={onRate} />}
     </div>
   );
 }

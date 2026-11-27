@@ -112,3 +112,51 @@ export function monthReview(entries, members, history, year, month) {
 }
 /** The first month with a movie night, as { year, month }, or null. */
 export const firstMonth = (history) => (history.length ? ((d) => ({ year: d.getFullYear(), month: d.getMonth() }))(new Date(Math.min(...history.map((n) => n.at)))) : null);
+
+/**
+ * Family awards: light-hearted superlatives worked out from ratings, Rotten Tomatoes scores and
+ * the lists people keep. Each is { key, title, winner (a member) or movie, detail }. An award is
+ * only given when there is enough to go on, so the list grows as the family rates more.
+ */
+export function familyAwards(entries, members) {
+  const list = Object.values(entries);
+  const awards = [];
+  const stars = (e, id) => shownStars(e.ratings?.[id]);
+  const count = (id, status) => list.filter((e) => e.ratings?.[id]?.status === status).length;
+  const top = (rows) => [...rows].sort((a, b) => b.n - a.n)[0];
+  const person = (key, title, rows, least, text) => {
+    const best = top(rows.filter((r) => r.n >= least));
+    if (best) awards.push({ key, title, winner: best.member, detail: text(best) });
+  };
+
+  person('rated', 'Seen it all', members.map((m) => ({ member: m, n: list.filter((e) => stars(e, m.id)).length })), 10, (r) => `${r.n} movies rated`);
+  person('wants', 'Longest watchlist', members.map((m) => ({ member: m, n: count(m.id, 'unseen') })), 5, (r) => `${r.n} movies on the Want to list`);
+  person('again', 'Rewatcher', members.map((m) => ({ member: m, n: count(m.id, 'again') })), 3, (r) => `would watch ${r.n} movies again`);
+  person('never', 'Hardest to please', members.map((m) => ({ member: m, n: count(m.id, 'pass') })), 3, (r) => `${r.n} movies ruled out`);
+
+  // Versus the critics: how far each person's stars sit from the Rotten Tomatoes score (stars x 20).
+  const gaps = members.map((m) => {
+    const diffs = list.filter((e) => stars(e, m.id) && typeof e.movie.rt === 'number').map((e) => stars(e, m.id) * 20 - e.movie.rt);
+    return { member: m, n: diffs.length, lean: diffs.length ? mean(diffs) : 0, apart: diffs.length ? mean(diffs.map(Math.abs)) : 0 };
+  }).filter((g) => g.n >= 8);
+  if (gaps.length) {
+    const rebel = [...gaps].sort((a, b) => b.apart - a.apart)[0];
+    awards.push({ key: 'rebel', title: 'Versus the critics', winner: rebel.member, detail: `on average ${Math.round(rebel.apart)} points away from Rotten Tomatoes, usually ${rebel.lean >= 0 ? 'kinder' : 'harsher'}` });
+    if (gaps.length > 1) {
+      const critic = [...gaps].sort((a, b) => a.apart - b.apart)[0];
+      if (critic.member.id !== rebel.member.id) awards.push({ key: 'critic', title: 'Thinks like a critic', winner: critic.member, detail: `only ${Math.round(critic.apart)} points from Rotten Tomatoes on average` });
+    }
+  }
+
+  // Movies at least two people gave stars to.
+  const shared = list.map((e) => {
+    const given = members.map((m) => stars(e, m.id)).filter(Boolean);
+    return given.length >= 2 ? { movie: e.movie, n: given.length, average: mean(given), spread: Math.max(...given) - Math.min(...given) } : null;
+  }).filter(Boolean);
+  const pick = (key, title, rows, sort, text) => { const best = [...rows].sort(sort)[0]; if (best) awards.push({ key, title, movie: best.movie, detail: text(best) }); };
+  const scored = shared.filter((x) => typeof x.movie.rt === 'number');
+  pick('harmony', 'Perfect harmony', shared.filter((x) => x.n >= Math.min(3, members.length) && x.spread <= 0.5), (a, b) => b.n - a.n || b.average - a.average, (x) => `all ${x.n} of you within half a star (average ${x.average.toFixed(1)})`);
+  pick('gem', 'Our hidden gem', scored.filter((x) => x.average >= 4 && x.movie.rt < 60), (a, b) => (b.average * 20 - b.movie.rt) - (a.average * 20 - a.movie.rt), (x) => `you gave it ${x.average.toFixed(1)} stars; Rotten Tomatoes says ${x.movie.rt}%`);
+  pick('overrated', 'Most overrated', scored.filter((x) => x.average <= 2.5 && x.movie.rt >= 80), (a, b) => (b.movie.rt - b.average * 20) - (a.movie.rt - a.average * 20), (x) => `Rotten Tomatoes says ${x.movie.rt}%; you gave it ${x.average.toFixed(1)} stars`);
+  return awards;
+}

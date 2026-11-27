@@ -1,6 +1,7 @@
 // Checks for the taste and suggestion rules. Run with: npm test
 import assert from 'node:assert/strict';
-import { familyStats, monthReview, unscoredNights } from '../src/lib/stats.js';
+import { familyAwards, familyStats, monthReview, unscoredNights } from '../src/lib/stats.js';
+import { planNights, watchedIds } from '../src/lib/marathon.js';
 import { voteResult, liking, quality, qualityNudge, shownStars, forYou, activeSnoozes, applyFilters, streaming, mergeSimilar, predictStars, rankToLiking, suggest, tasteProfile } from '../src/lib/suggest.js';
 
 const movie = (id, title, genres, vote = 7.5) => ({ id, title, genres, vote });
@@ -302,5 +303,71 @@ assert.equal(shownStars({ status: 'seen', stars: null, via: 'watched' }), null);
   const loved = Object.fromEntries(Array.from({ length: 10 }, (_, n) => [310 + n, { movie: movie(310 + n, `H${n}`, ['Horror']), ratings: { g: seen(5) } }]));
   assert.ok(predict(profileOf(loved, 'g'), horror) > 3.5);
   setStated({});
+}
+
+// Head-to-head: points move from loser to winner, upsets move more, and Tonight follows them.
+{
+  const { duel, wantPull, DUEL_START } = await import('../src/lib/suggest.js');
+  assert.deepEqual(duel(1000, 1000), [1016, 984]);
+  const [fav] = duel(1200, 1000); const [, dog] = duel(1000, 1200);
+  assert.ok(fav - 1200 < 16 && 1200 - dog > 16);
+  assert.equal(wantPull({ status: 'unseen' }), 0);
+  assert.equal(wantPull({ status: 'unseen', elo: DUEL_START + 400 }), 5);
+  assert.equal(wantPull({ status: 'unseen', elo: DUEL_START - 100 }), -2.5);
+  const A = movie(201, 'Top', ['Comedy']), B = movie(202, 'Bottom', ['Comedy']);
+  const ranked = suggest({ 201: { movie: A, ratings: { a: { status: 'unseen', stars: null, elo: 1100 } } }, 202: { movie: B, ratings: { a: { status: 'unseen', stars: null, elo: 900 } } } }, ['a']);
+  assert.deepEqual(ranked.map((e) => e.movie.id), [201, 202]);
+  assert.equal(Math.round((ranked[0].rank - ranked[1].rank) * 100) / 100, 5);
+}
+
+// Marathon nights: packed in order up to the budget; done = ticked or logged as a movie night.
+{
+  const m = (id, runtime) => ({ id, title: `M${id}`, runtime });
+  const nights = planNights([m(1, 100), m(2, 110), m(3, 95), m(4, 200), m(5, null)], 240);
+  assert.deepEqual(nights.map((n) => n.map((x) => x.id)), [[1, 2], [3], [4], [5]]);
+  const done = watchedIds({ movies: [m(1), m(2), m(3)], done: [2] }, [{ movie: { id: 3 } }, { movie: { id: 99 } }]);
+  assert.deepEqual([...done].sort(), ['2', '3']);
+}
+
+// Family awards appear only with enough to go on.
+{
+  const people = [{ id: 'x', name: 'X' }, { id: 'y', name: 'Y' }];
+  assert.deepEqual(familyAwards({}, people), []);
+  const es = {};
+  for (let n = 0; n < 12; n += 1) es[900 + n] = { movie: { ...movie(900 + n, `R${n}`, ['Comedy']), rt: 90 }, ratings: { x: seen(4.5), y: seen(n < 10 ? 2 : 4.5) } };
+  es[950] = { movie: { ...movie(950, 'Gem', ['Comedy']), rt: 40 }, ratings: { x: seen(5), y: seen(4.5) } };
+  const got = Object.fromEntries(familyAwards(es, people).map((a) => [a.key, a]));
+  assert.equal(got.rated.winner.id, 'x');
+  assert.equal(got.rebel.winner.id, 'y');
+  assert.equal(got.critic.winner.id, 'x');
+  assert.equal(got.gem.movie.id, 950);
+  assert.ok(got.harmony);
+}
+
+// Weekly digest
+{
+  const { buildDigest } = await import('../src/lib/digest.js');
+  const { plain } = await import('../api/digest.js');
+  const now = Date.parse('2026-11-27T20:00:00Z');
+  const mv = (id, title, extra = {}) => ({ id, title, year: 2020, genres: ['Comedy'], runtime: 100, rt: 90, ...extra });
+  const entries = {
+    1: { movie: mv(1, 'Alpha', { watch: { v: 2, on: [{ name: 'Netflix' }], free: [], rent: [] } }), ratings: { a: { status: 'unseen' }, b: { status: 'unseen' }, g: { status: 'pass' } } },
+    2: { movie: mv(2, 'Beta'), ratings: { a: { status: 'unseen' } } },
+    3: { movie: mv(3, 'Gamma', { release: '2026-12-04' }), ratings: { b: { status: 'unseen' } } },
+    4: { movie: mv(4, 'Delta'), ratings: { a: { status: 'seen', stars: 4 } } },
+  };
+  const members = [{ id: 'a', name: 'Ann' }, { id: 'b', name: 'Bo' }, { id: 'g', name: 'Gus', guest: true }];
+  const history = [{ id: 'n1', at: now - 86400000, movie: mv(4, 'Delta'), watchers: ['a', 'b'] }];
+  const marathons = [{ id: 'm', title: 'Trilogy', perNight: 240, movies: [mv(4, 'Delta'), mv(5, 'Epsilon')], done: [] }];
+  const d = buildDigest({ entries, members, history, marathons, now, site: 'https://example.test' });
+  assert.ok(d.subject.includes('Alpha'), 'the top pick is in the subject');
+  assert.ok(d.text.includes('Alpha (2020)') && d.text.includes('Wanted by Ann and Bo'), 'top pick names who wants it; a guest veto does not count');
+  assert.ok(d.text.includes('Gamma: out Dec 4'), 'coming release is listed');
+  assert.ok(!/TOP PICKS[^A-Z]*Gamma/.test(d.text), 'unreleased movies are not picks');
+  assert.ok(d.text.includes('Trilogy: 1 of 2 watched. Next night: Epsilon'), 'marathon progress');
+  assert.ok(d.text.includes('Bo: Delta') && !d.text.includes('Ann: Delta'), 'only people who have not scored are nudged');
+  assert.ok(!d.text.includes('Gus'), 'guests are left out');
+  assert.ok(d.html.includes('<strong>Alpha (2020)</strong>'));
+  assert.deepEqual(plain({ mapValue: { fields: { n: { integerValue: '3' }, l: { arrayValue: { values: [{ stringValue: 'x' }, { booleanValue: true }] } }, e: { arrayValue: {} } } } }), { n: 3, l: ['x', true], e: [] });
 }
 console.log('\nAll suggestion checks passed.');
